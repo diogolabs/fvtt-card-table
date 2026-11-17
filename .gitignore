@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.zip
+.DS_Store
+
+# Ignora os arquivos binários do LevelDB gerados no build,
+# mas mantém os fontes JSON em packs/*/_source/ versionados no Git!
+packs/*/*
+!packs/*/_source/
+!packs/*/_source/**

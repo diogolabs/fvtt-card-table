@@ -1,0 +1,19 @@
+{
+  "name": "fvtt-card-table",
+  "version": "1.0.0",
+  "description": "Foundry VTT v14 Card Engine based on Poker, Buraco, MTG and Cockatrice mechanics",
+  "type": "module",
+  "scripts": {
+    "pack": "fvtt package pack -n decks --type Module --in ./packs/decks/_source --out ./packs/decks",
+    "unpack": "fvtt package unpack -n decks --type Module --in ./packs/decks --out ./packs/decks/_source",
+    "build": "npm run pack"
+  },
+  "devDependencies": {
+    "@foundryvtt/foundryvtt-cli": "^1.0.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diogolabs/fvtt-card-table.git"
+  },
+  "license": "MIT"
+}

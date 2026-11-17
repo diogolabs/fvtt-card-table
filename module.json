@@ -1,0 +1,61 @@
+{
+  "id": "fvtt-card-table",
+  "title": "DiogoLabs Card Table (Poker, Buraco, MTG & Cockatrice Engine)",
+  "description": "Sistema completo e agnóstico de manipulação de cartas para Foundry VTT v14. Inclui zonas estilo Cockatrice, automações para Poker, Buraco (Canastra) e Magic: The Gathering (Tap, Scry, Mulligan, Contadores, Anexos), Hand Dock em ApplicationV2 e integração opcional com Complete Card Management.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "12",
+    "verified": "14",
+    "maximum": "14"
+  },
+  "authors": [
+    {
+      "name": "DiogoLabs",
+      "url": "https://github.com/diogolabs"
+    }
+  ],
+  "esmodules": [
+    "src/main.mjs"
+  ],
+  "styles": [
+    "styles/card-table.css"
+  ],
+  "languages": [
+    {
+      "lang": "pt-BR",
+      "name": "Português (Brasil)",
+      "path": "lang/pt-BR.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "packs": [
+    {
+      "name": "decks",
+      "label": "Baralhos Base (Poker, Buraco & MTG)",
+      "path": "packs/decks",
+      "type": "Cards",
+      "ownership": {
+        "PLAYER": "OBSERVER",
+        "ASSISTANT": "OWNER"
+      }
+    }
+  ],
+  "relationships": {
+    "optional": [
+      {
+        "id": "complete-card-management",
+        "type": "module",
+        "reason": "Habilita integração avançada com o Card Layer do Canvas e Scene Regions do Complete Card Management."
+      }
+    ]
+  },
+  "url": "https://github.com/diogolabs/fvtt-card-table",
+  "manifest": "https://github.com/diogolabs/fvtt-card-table/releases/latest/download/module.json",
+  "download": "https://github.com/diogolabs/fvtt-card-table/releases/latest/download/module.zip",
+  "readme": "https://github.com/diogolabs/fvtt-card-table/blob/main/README.md",
+  "changelog": "https://github.com/diogolabs/fvtt-card-table/releases"
+}

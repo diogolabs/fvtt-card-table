@@ -1,0 +1,82 @@
+{
+  "_id": "PokerDeck0000001",
+  "_key": "!cards!PokerDeck0000001",
+  "name": "Baralho de Poker (Texas Hold'em 52 Cartas)",
+  "type": "deck",
+  "description": "<p>Baralho padrão de Poker para Texas Hold'em e Omaha, configurado com valores numéricos de 2 a 14 (Ás).</p>",
+  "img": "icons/sundries/gaming/playing-cards-grey.webp",
+  "width": 2,
+  "height": 3,
+  "rotation": 0,
+  "flags": {
+    "fvtt-card-table": {
+      "stackState": {
+        "gameMode": "poker",
+        "zoneType": "library",
+        "sourceVersion": "1.0.0"
+      }
+    }
+  },
+  "cards": [
+    {
+      "_id": "PokerCardAceSpad",
+      "_key": "!cards.cards!PokerDeck0000001.PokerCardAceSpad",
+      "name": "Ás de Espadas (A♠)",
+      "type": "base",
+      "suit": "spades",
+      "value": 14,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Ás de Espadas (A♠)",
+          "img": "icons/sundries/gaming/playing-cards-grey.webp",
+          "text": "High Card / Nut Flush / Royal Straight"
+        }
+      ],
+      "back": {
+        "name": "Verso Poker",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      }
+    },
+    {
+      "_id": "PokerCardKingSpa",
+      "_key": "!cards.cards!PokerDeck0000001.PokerCardKingSpa",
+      "name": "Rei de Espadas (K♠)",
+      "type": "base",
+      "suit": "spades",
+      "value": 13,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Rei de Espadas (K♠)",
+          "img": "icons/sundries/gaming/playing-cards-grey.webp",
+          "text": "Cowboys"
+        }
+      ],
+      "back": {
+        "name": "Verso Poker",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      }
+    },
+    {
+      "_id": "PokerCardAceHear",
+      "_key": "!cards.cards!PokerDeck0000001.PokerCardAceHear",
+      "name": "Ás de Copas (A♥)",
+      "type": "base",
+      "suit": "hearts",
+      "value": 14,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Ás de Copas (A♥)",
+          "img": "icons/sundries/gaming/playing-cards-grey.webp",
+          "text": "Pocket Rockets"
+        }
+      ],
+      "back": {
+        "name": "Verso Poker",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      }
+    }
+  ]
+}

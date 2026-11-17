@@ -1,0 +1,99 @@
+{
+  "_id": "MtgDeck000000001",
+  "_key": "!cards!MtgDeck000000001",
+  "name": "Grimório MTG / Cockatrice (Suporte a Tap, Contadores e DFC)",
+  "type": "deck",
+  "description": "<p>Grimório modelo para Magic: The Gathering e estilo Cockatrice, com suporte a Tap/Untap, Contadores +1/+1, Custo de Mana (CMC) e Cartas de Dupla Face (Transform/MDFC).</p>",
+  "img": "icons/sundries/gaming/playing-cards-grey.webp",
+  "width": 2,
+  "height": 3,
+  "rotation": 0,
+  "flags": {
+    "fvtt-card-table": {
+      "stackState": {
+        "gameMode": "mtg",
+        "zoneType": "library",
+        "sourceVersion": "1.0.0"
+      }
+    }
+  },
+  "cards": [
+    {
+      "_id": "MtgCardIsland001",
+      "_key": "!cards.cards!MtgDeck000000001.MtgCardIsland001",
+      "name": "Island (Ilha)",
+      "type": "base",
+      "suit": "lands",
+      "value": 0,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Island (Ilha)",
+          "img": "icons/magic/water/wave-water-blue.webp",
+          "text": "Basic Land — Island ({T}: Add {U})"
+        }
+      ],
+      "back": {
+        "name": "Deckmaster",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      },
+      "flags": {
+        "fvtt-card-table": {
+          "state": {
+            "tapped": false,
+            "metadata": {
+              "manaCost": "",
+              "cmc": 0,
+              "cardTypes": ["Basic Land", "Island"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "_id": "MtgCardDelverDFC",
+      "_key": "!cards.cards!MtgDeck000000001.MtgCardDelverDFC",
+      "name": "Delver of Secrets // Insectile Aberration",
+      "type": "base",
+      "suit": "creatures",
+      "value": 1,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Delver of Secrets (1/1)",
+          "img": "icons/magic/control/silhouette-hold-change-blue.webp",
+          "text": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform Delver of Secrets."
+        },
+        {
+          "name": "Insectile Aberration (3/2 Flying)",
+          "img": "icons/creatures/invertebrates/wasp-swarm-attack.webp",
+          "text": "Flying — 3/2"
+        }
+      ],
+      "back": {
+        "name": "Deckmaster",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      },
+      "flags": {
+        "fvtt-card-table": {
+          "state": {
+            "tapped": false,
+            "counters": {
+              "plusOne": 0,
+              "loyalty": 0,
+              "charge": 0,
+              "custom": []
+            },
+            "metadata": {
+              "manaCost": "{U}",
+              "cmc": 1,
+              "cardTypes": ["Creature", "Human", "Wizard"],
+              "power": "1",
+              "toughness": "1"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

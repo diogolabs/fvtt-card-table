@@ -1,0 +1,31 @@
+{
+  "FVTT_CARD_TABLE": {
+    "App": {
+      "Title": "Mesa de Cartas (Poker, Buraco, MTG & Cockatrice)"
+    },
+    "Scry": {
+      "Title": "Inspecionar Topo do Baralho (Scry / Peek)"
+    },
+    "Settings": {
+      "DefaultGameMode": {
+        "Name": "Modo de Jogo Padrão da Mesa",
+        "Hint": "Define os controles rápidos exibidos por padrão ao abrir a Mesa de Cartas."
+      },
+      "AutoSync": {
+        "Name": "Sincronizar Baralhos com Compêndio ao Iniciar",
+        "Hint": "Atualiza automaticamente cartas e metadados dos baralhos do Mundo quando o módulo recebe atualização via GitHub."
+      }
+    },
+    "Keybindings": {
+      "OpenBoard": "Abrir Mesa de Cartas Virtual (Cockatrice UI)"
+    },
+    "Notifications": {
+      "DecksSynced": "{count} baralho(s) sincronizado(s) com a versão {version} do módulo.",
+      "UntappedAll": "Todas as cartas na mesa foram desviradas (Untap All).",
+      "EmptyDeck": "O baralho não possui cartas disponíveis.",
+      "MulliganDone": "Mulligan realizado! {count} novas cartas compradas.",
+      "EmptyTrash": "O Lixo está vazio.",
+      "SelectCardsForMeld": "Selecione as cartas na sua mão clicando nelas antes de baixar o jogo."
+    }
+  }
+}

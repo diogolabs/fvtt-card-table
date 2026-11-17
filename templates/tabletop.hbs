@@ -1,0 +1,201 @@
+<div class="fvtt-card-table-container">
+  <!-- BARRA DE MODO DE JOGO E CONTROLES GLOBAIS -->
+  <header class="fvtt-ct-toolbar">
+    <div class="fvtt-ct-modes">
+      <button type="button" class="fvtt-ct-btn {{#if isMtg}}active{{/if}}" data-action="setGameMode" data-mode="mtg">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> MTG / Cockatrice
+      </button>
+      <button type="button" class="fvtt-ct-btn {{#if isPoker}}active{{/if}}" data-action="setGameMode" data-mode="poker">
+        <i class="fa-solid fa-Coins"></i> Poker
+      </button>
+      <button type="button" class="fvtt-ct-btn {{#if isBuraco}}active{{/if}}" data-action="setGameMode" data-mode="buraco">
+        <i class="fa-solid fa-layer-group"></i> Buraco / Canastra
+      </button>
+    </div>
+
+    <!-- AÇÕES ESPECÍFICAS DO MODO ATIVO -->
+    <div class="fvtt-ct-mode-actions">
+      {{#if isMtg}}
+        <button type="button" class="fvtt-ct-btn" data-action="untapAll" title="Ctrl+U: Desvirar todas as permanentes">
+          <i class="fa-solid fa-rotate-left"></i> Untap All
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="scryDeck" data-count="2">
+          <i class="fa-solid fa-eye"></i> Scry 2
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="mulliganHand">
+          <i class="fa-solid fa-shuffle"></i> Mulligan
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="createToken">
+          <i class="fa-solid fa-plus-circle"></i> Criar Token
+        </button>
+      {{/if}}
+
+      {{#if isPoker}}
+        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="flop">
+          Abrir Flop (3)
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="turn">
+          Abrir Turn (1)
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="river">
+          Abrir River (1)
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="pokerBet" data-amount="10">
+          +10 Pote
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="pokerBet" data-amount="50">
+          +50 Pote
+        </button>
+      {{/if}}
+
+      {{#if isBuraco}}
+        <button type="button" class="fvtt-ct-btn" data-action="buracoSetup">
+          <i class="fa-solid fa-play"></i> Distribuir Mesa (11 + Mortos)
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="buracoBuyTrash">
+          <i class="fa-solid fa-hand-holding"></i> Comprar Lixo
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="buracoPlayMeld">
+          <i class="fa-solid fa-check-double"></i> Baixar Jogo Selecionado
+        </button>
+      {{/if}}
+    </div>
+  </header>
+
+  <!-- ÁREA CENTRAL: ZONAS LATERAIS (DECK + DESCARTE) E CAMPO DE BATALHA / MESA -->
+  <div class="fvtt-ct-main-grid">
+    <!-- COLUNA ESQUERDA: BARALHO E LIXO/CEMITÉRIO -->
+    <aside class="fvtt-ct-sidebar-zones">
+      <div class="fvtt-ct-zone-box">
+        <h4><i class="fa-solid fa-layer-group"></i> {{#if deck}}{{deck.name}}{{else}}Sem Baralho{{/if}}</h4>
+        {{#if deck}}
+          <div class="fvtt-ct-deck-counter">{{deck.availableCount}} / {{deck.totalCount}} cartas</div>
+          <div class="fvtt-ct-zone-buttons">
+            <button type="button" class="fvtt-ct-btn" data-action="drawCard" data-count="1">Comprar 1</button>
+            <button type="button" class="fvtt-ct-btn" data-action="shuffleDeck">Embaralhar</button>
+            <button type="button" class="fvtt-ct-btn" data-action="recallDeck">Resetar</button>
+          </div>
+        {{else}}
+          <p class="fvtt-ct-empty">Importe um Baralho do Compêndio para começar.</p>
+        {{/if}}
+      </div>
+
+      <div class="fvtt-ct-zone-box">
+        <h4>
+          <i class="fa-solid fa-trash-can"></i>
+          {{#if isBuraco}}Lixo ({{discard.count}}){{else if isPoker}}Queima / Descarte ({{discard.count}}){{else}}Cemitério ({{discard.count}}){{/if}}
+        </h4>
+        {{#if discard.topCard}}
+          <div class="fvtt-ct-card-mini">
+            <img src="{{discard.topCard.img}}" alt="{{discard.topCard.name}}" />
+            <span>{{discard.topCard.name}}</span>
+          </div>
+        {{else}}
+          <p class="fvtt-ct-empty">Vazio</p>
+        {{/if}}
+      </div>
+    </aside>
+
+    <!-- ÁREA CENTRAL: TABLEZONE / BATTLEFIELD / COMUNIDADE / CANASTRAS -->
+    <main class="fvtt-ct-battlefield">
+      <div class="fvtt-ct-zone-header">
+        <h3>
+          {{#if isPoker}}
+            Mesa Comunitária — Pote Atual: <span class="fvtt-ct-badge-gold">{{battlefield.pot}} fichas</span>
+          {{else if isBuraco}}
+            Jogos Baixados / Canastras — Pontos: <span class="fvtt-ct-badge-gold">{{battlefield.buracoScore.total}} pts</span>
+          {{else}}
+            Campo de Batalha (TableZone)
+          {{/if}}
+        </h3>
+      </div>
+
+      <div class="fvtt-ct-card-grid">
+        {{#each battlefield.cards as |card|}}
+          <div
+            class="fvtt-ct-card {{#if card.tapped}}is-tapped{{/if}} {{#if card.selected}}is-selected{{/if}}"
+            data-card-id="{{card.id}}"
+            data-zone="battlefield"
+          >
+            <div class="fvtt-ct-card-image-wrap" data-action="toggleTapCard" title="Clique para Virar 90° (Tap/Untap)">
+              <img src="{{card.img}}" alt="{{card.name}}" />
+              {{#if card.meldGroupId}}
+                <span class="fvtt-ct-meld-tag">Jogo #{{card.meldGroupId}}</span>
+              {{/if}}
+              {{#if card.counters.plusOne}}
+                <span class="fvtt-ct-counter-badge plus-one">+{{card.counters.plusOne}}/+{{card.counters.plusOne}}</span>
+              {{/if}}
+            </div>
+            <div class="fvtt-ct-card-title">{{card.name}}</div>
+            <div class="fvtt-ct-card-actions">
+              <button type="button" data-action="toggleTapCard" title="Tap / Untap (90°)">
+                <i class="fa-solid fa-rotate-right"></i>
+              </button>
+              <button type="button" data-action="flipCard" title="Virar Face/Verso">
+                <i class="fa-solid fa-repeat"></i>
+              </button>
+              {{#if ../isMtg}}
+                <button type="button" data-action="modifyCounter" data-counter="plusOne" data-delta="1" title="+1/+1">
+                  +1
+                </button>
+                <button type="button" data-action="modifyCounter" data-counter="plusOne" data-delta="-1" title="-1/-1">
+                  -1
+                </button>
+              {{/if}}
+              <button type="button" data-action="discardCard" title="Enviar para Cemitério / Lixo">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        {{else}}
+          <p class="fvtt-ct-empty">Nenhuma carta na mesa no momento.</p>
+        {{/each}}
+      </div>
+    </main>
+  </div>
+
+  <!-- DOCK INFERIOR: MÃO DO JOGADOR (HANDZONE) -->
+  <footer class="fvtt-ct-hand-dock">
+    <div class="fvtt-ct-hand-header">
+      <h4><i class="fa-solid fa-hand"></i> {{#if hand}}{{hand.name}} ({{hand.cards.length}} cartas){{else}}Sem Mão Vinculada{{/if}}</h4>
+      <div class="fvtt-ct-hand-controls">
+        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="suit">
+          <i class="fa-solid fa-arrow-down-a-z"></i> Ordenar por Naipe
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="value">
+          <i class="fa-solid fa-arrow-down-1-9"></i> Ordenar por Valor
+        </button>
+        {{#if isMtg}}
+          <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="cmc">
+            Ordenar por CMC
+          </button>
+        {{/if}}
+      </div>
+    </div>
+
+    <div class="fvtt-ct-hand-cards">
+      {{#each hand.cards as |card|}}
+        <div
+          class="fvtt-ct-card {{#if card.selected}}is-selected{{/if}}"
+          data-card-id="{{card.id}}"
+          data-zone="hand"
+        >
+          <div class="fvtt-ct-card-image-wrap" data-action="toggleSelectCard">
+            <img src="{{card.img}}" alt="{{card.name}}" />
+          </div>
+          <div class="fvtt-ct-card-title">{{card.name}}</div>
+          <div class="fvtt-ct-card-actions">
+            <button type="button" data-action="playCardToTable" title="Jogar na Mesa (Segure Shift para Baixar Virada)">
+              <i class="fa-solid fa-arrow-up"></i> Jogar
+            </button>
+            <button type="button" data-action="discardCard" title="Descartar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      {{else}}
+        <p class="fvtt-ct-empty">Sua mão está vazia.</p>
+      {{/each}}
+    </div>
+  </footer>
+</div>

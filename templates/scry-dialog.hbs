@@ -1,0 +1,33 @@
+<div class="fvtt-ct-scry-container">
+  <p class="fvtt-ct-scry-help">
+    Inspecione as cartas do topo de <strong>{{deckName}}</strong>. Escolha se cada carta permanece no <strong>Topo</strong> ou vai para o <strong>Fundo</strong> do baralho:
+  </p>
+
+  <div class="fvtt-ct-scry-list">
+    {{#each items as |item|}}
+      <div class="fvtt-ct-scry-item" data-card-id="{{item.id}}" data-index="{{item.index}}">
+        <img src="{{item.img}}" alt="{{item.name}}" class="fvtt-ct-scry-thumb" />
+        <div class="fvtt-ct-scry-info">
+          <strong>{{item.name}}</strong>
+          <span class="fvtt-ct-scry-badge {{#if item.isTop}}top{{else}}bottom{{/if}}">
+            {{#if item.isTop}}Topo do Baralho{{else}}Fundo do Baralho{{/if}}
+          </span>
+        </div>
+        <div class="fvtt-ct-scry-item-actions">
+          <button type="button" class="fvtt-ct-btn" data-action="moveUp" title="Subir na ordem">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="toggleDestination">
+            {{#if item.isTop}}Enviar p/ Fundo{{else}}Manter no Topo{{/if}}
+          </button>
+        </div>
+      </div>
+    {{/each}}
+  </div>
+
+  <footer class="fvtt-ct-scry-footer">
+    <button type="button" class="fvtt-ct-btn primary" data-action="confirmScry">
+      <i class="fa-solid fa-check"></i> Confirmar Scry
+    </button>
+  </footer>
+</div>

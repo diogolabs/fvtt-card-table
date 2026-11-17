@@ -1,0 +1,31 @@
+{
+  "FVTT_CARD_TABLE": {
+    "App": {
+      "Title": "Card Table (Poker, Buraco, MTG & Cockatrice)"
+    },
+    "Scry": {
+      "Title": "Inspect Top of Library (Scry / Peek)"
+    },
+    "Settings": {
+      "DefaultGameMode": {
+        "Name": "Default Card Table Mode",
+        "Hint": "Sets the default quick-actions bar displayed when opening the Card Table."
+      },
+      "AutoSync": {
+        "Name": "Auto-Sync World Decks with Compendium",
+        "Hint": "Automatically updates world deck metadata when the module is updated via GitHub."
+      }
+    },
+    "Keybindings": {
+      "OpenBoard": "Open Virtual Card Table (Cockatrice UI)"
+    },
+    "Notifications": {
+      "DecksSynced": "{count} deck(s) synchronized with module version {version}.",
+      "UntappedAll": "All permanents on the battlefield have been untapped.",
+      "EmptyDeck": "The deck has no available cards.",
+      "MulliganDone": "Mulligan complete! {count} new cards drawn.",
+      "EmptyTrash": "The discard pile is empty.",
+      "SelectCardsForMeld": "Select cards in your hand first before playing a meld."
+    }
+  }
+}

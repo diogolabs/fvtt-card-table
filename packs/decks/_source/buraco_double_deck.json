@@ -1,0 +1,82 @@
+{
+  "_id": "BuracoDeck000001",
+  "_key": "!cards!BuracoDeck000001",
+  "name": "Baralho de Buraco / Canastra (Pontuação Automática)",
+  "type": "deck",
+  "description": "<p>Baralho configurado para Buraco/Canastra com pontuação embutida (Ás=15, 2=10 curinga, 8-K=10, 3-7=5, Curingão=20).</p>",
+  "img": "icons/sundries/gaming/playing-cards-grey.webp",
+  "width": 2,
+  "height": 3,
+  "rotation": 0,
+  "flags": {
+    "fvtt-card-table": {
+      "stackState": {
+        "gameMode": "buraco",
+        "zoneType": "library",
+        "sourceVersion": "1.0.0"
+      }
+    }
+  },
+  "cards": [
+    {
+      "_id": "BuracoCard2Spade",
+      "_key": "!cards.cards!BuracoDeck000001.BuracoCard2Spade",
+      "name": "2 de Espadas (2♠ - Curinga)",
+      "type": "base",
+      "suit": "spades",
+      "value": 2,
+      "face": 0,
+      "faces": [
+        {
+          "name": "2 de Espadas (2♠)",
+          "img": "icons/sundries/gaming/playing-cards-grey.webp",
+          "text": "Curinga (10 pontos)"
+        }
+      ],
+      "back": {
+        "name": "Verso Buraco",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      },
+      "flags": {
+        "fvtt-card-table": {
+          "state": {
+            "isWildcard": true,
+            "metadata": {
+              "pointValue": 10
+            }
+          }
+        }
+      }
+    },
+    {
+      "_id": "BuracoCardJoker1",
+      "_key": "!cards.cards!BuracoDeck000001.BuracoCardJoker1",
+      "name": "Curingão (Joker)",
+      "type": "base",
+      "suit": "joker",
+      "value": 0,
+      "face": 0,
+      "faces": [
+        {
+          "name": "Curingão (Joker)",
+          "img": "icons/sundries/gaming/playing-cards-grey.webp",
+          "text": "Curingão (20 pontos — Canastra Suja)"
+        }
+      ],
+      "back": {
+        "name": "Verso Buraco",
+        "img": "icons/sundries/gaming/playing-cards-grey.webp"
+      },
+      "flags": {
+        "fvtt-card-table": {
+          "state": {
+            "isWildcard": true,
+            "metadata": {
+              "pointValue": 20
+            }
+          }
+        }
+      }
+    }
+  ]
+}
