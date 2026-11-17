@@ -86,6 +86,14 @@ Para suportar simultaneamente o **Foundry VTT 14** e o **Foundry VTT 13** no mes
 * **Avaliador Oficial de 7 Cartas (`evaluateBestHand` & `compareEvaluations`):**
   * Analisa todas as 21 combinações de 5 cartas dentre as 7 disponíveis (`2 da mão + 5 da mesa`), classificando *Royal Flush, Straight Flush, Quadra, Full House, Flush, Sequência (incluindo A-2-3-4-5), Trinca, Dois Pares, Par e Carta Alta* com desempate automático por *Kickers* e pagamento instantâneo do Pote Solo.
 
+### `v1.0.5` — Modo Padrão (Sistema Integrado do Foundry VTT)
+* **Modo Padrão (`mode: "standard"`):**
+  * Integra diretamente documentos nativos do Foundry (`Deck`, `Hand` e `Pile`) dentro da interface visual da Card Table.
+  * **Baralho (`Deck`):** Detecta qualquer baralho existente no mundo (com seletor rápido caso exista mais de um Deck), com ações de Comprar Aberta, Comprar Fechada, Distribuir 1 ou 5 cartas para todas as mãos (`deck.deal`), Embaralhar, Resetar e botão para abrir a ficha nativa do Foundry (`sheet.render(true)`).
+  * **Pilha da Mesa (`Table Pile`):** Permite alternar entre pilhas da mesa, jogar cartas abertas ou fechadas (`Shift + Clique`), pegar cartas da mesa de volta para a mão (`takeCardToHand`), virar face/verso (`flip`), girar 90° (`tap`) ou enviar para descarte.
+  * **Múltiplas Pilhas de Descarte (`discardPiles`):** Lista todas as pilhas de descarte existentes no mundo (0, 1 ou várias), permitindo definir qual é o descarte alvo, comprar a carta do topo para a mão (`drawTopDiscard`), devolver todo o descarte embaralhado para o Deck (`returnDiscardToDeck`) ou criar novas pilhas de descarte.
+  * **Mãos dos Jogadores (`playerHandsList`):** Lista todas as mãos registradas no mundo com contagem de cartas e botão **`👉 Passar`** (`passSelectedToHand`) para entregar cartas selecionadas diretamente para a mão de outro jogador.
+
 ---
 
 ## 4. Mapa de Arquivos do Projeto

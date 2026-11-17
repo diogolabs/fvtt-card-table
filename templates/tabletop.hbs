@@ -4,6 +4,9 @@
     <div class="fvtt-ct-modes">
       {{#if isGM}}
         <span class="fvtt-ct-gm-label"><i class="fa-solid fa-crown"></i> GM:</span>
+        <button type="button" class="fvtt-ct-btn {{#if isStandard}}active{{/if}}" data-action="setGameMode" data-mode="standard" title="Modo Padrão integrado ao sistema nativo de Cartas do Foundry VTT">
+          <i class="fa-solid fa-clone"></i> Padrão
+        </button>
         <button type="button" class="fvtt-ct-btn {{#if isPoker}}active{{/if}}" data-action="setGameMode" data-mode="poker">
           <i class="fa-solid fa-coins"></i> Poker
         </button>
@@ -23,6 +26,26 @@
 
     <!-- AÇÕES ESPECÍFICAS DO MODO ATIVO (CONTROLES DO CRUPIÊ / GM) -->
     <div class="fvtt-ct-mode-actions">
+      {{#if isStandard}}
+        {{#if isGM}}
+          <button type="button" class="fvtt-ct-btn primary" data-action="standardDealHands" data-count="1" title="Distribui 1 carta do baralho para a mão de cada jogador (Segure Shift para dar fechada)">
+            <i class="fa-solid fa-share-nodes"></i> Dar 1 Carta p/ Todos
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="standardDealHands" data-count="5" title="Distribui 5 cartas do baralho para a mão de cada jogador">
+            Dar 5 p/ Todos
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="createDiscardPile" title="Cria uma nova Pilha de Descarte no Foundry">
+            <i class="fa-solid fa-plus"></i> Nova Pilha de Descarte
+          </button>
+        {{/if}}
+        <button type="button" class="fvtt-ct-btn" data-action="drawCard" data-count="1" title="Compra 1 carta aberta do topo do baralho">
+          <i class="fa-solid fa-hand-holding"></i> Comprar 1
+        </button>
+        <button type="button" class="fvtt-ct-btn" data-action="drawCard" data-count="1" data-facedown="true" title="Compra 1 carta virada para baixo">
+          <i class="fa-solid fa-eye-slash"></i> Comprar Fechada
+        </button>
+      {{/if}}
+
       {{#if isPoker}}
         {{#if isGM}}
           <button type="button" class="fvtt-ct-btn primary" data-action="pokerStartRound" title="Crupiê: Recolhe tudo, embaralha e dá 2 cartas privadas para cada jogador">
@@ -88,12 +111,38 @@
 
   <!-- ÁREA CENTRAL: ZONAS LATERAIS COMPACTAS (DECK + DESCARTE) E CAMPO DE BATALHA / MESA -->
   <div class="fvtt-ct-main-grid">
-    <!-- COLUNA ESQUERDA COMPACTA: BARALHO E LIXO/CEMITÉRIO/QUEIMA -->
+    <!-- COLUNA ESQUERDA COMPACTA: BARALHO, PILHAS DE DESCARTE E MÃOS -->
     <aside class="fvtt-ct-sidebar-zones">
       <div class="fvtt-ct-zone-box">
-        <h4><i class="fa-solid fa-layer-group"></i> {{#if deck}}{{deck.name}}{{else}}Sem Baralho{{/if}}</h4>
+        <div class="fvtt-ct-zone-title-row">
+          <h4><i class="fa-solid fa-layer-group"></i> {{#if deck}}{{deck.name}}{{else}}Sem Baralho{{/if}}</h4>
+          {{#if deck}}
+            <button type="button" class="fvtt-ct-icon-btn" data-action="openStackSheet" data-stack-id="{{deck.id}}" title="Abrir janela nativa do Foundry para este Baralho">
+              <i class="fa-solid fa-up-right-from-square"></i>
+            </button>
+          {{/if}}
+        </div>
+
+        {{#if isStandard}}
+          {{#if hasMultipleDecks}}
+            <div class="fvtt-ct-stack-switcher">
+              {{#each availableDecks as |d|}}
+                <button
+                  type="button"
+                  class="fvtt-ct-btn mini {{#if d.isSelected}}active{{/if}}"
+                  data-action="selectActiveDeck"
+                  data-deck-id="{{d.id}}"
+                  title="Alternar para o baralho {{d.name}}"
+                >
+                  {{d.name}} ({{d.availableCount}})
+                </button>
+              {{/each}}
+            </div>
+          {{/if}}
+        {{/if}}
+
         {{#if deck}}
-          <div class="fvtt-ct-deck-counter">{{deck.availableCount}} / {{deck.totalCount}} cartas</div>
+          <div class="fvtt-ct-deck-counter">{{deck.availableCount}} / {{deck.totalCount}} cartas disponíveis</div>
           <div class="fvtt-ct-zone-buttons">
             <button type="button" class="fvtt-ct-btn" data-action="drawCard" data-count="1">Comprar 1</button>
             <button type="button" class="fvtt-ct-btn" data-action="shuffleDeck">Embaralhar</button>
@@ -102,26 +151,121 @@
             {{/if}}
           </div>
         {{else}}
-          <p class="fvtt-ct-empty">Peça ao GM para clicar em <strong>"Preparar Mesa"</strong>.</p>
+          <p class="fvtt-ct-empty">Peça ao GM para clicar em <strong>"Preparar Mesa"</strong> ou criar um Deck no Foundry.</p>
         {{/if}}
       </div>
 
-      <div class="fvtt-ct-zone-box fvtt-ct-discard-box">
-        <h4>
-          <i class="fa-solid fa-fire"></i>
-          {{#if isBuraco}}Lixo ({{discard.count}}){{else if isPoker}}Queima / Muck ({{discard.count}}){{else}}Cemitério ({{discard.count}}){{/if}}
-        </h4>
-        {{#if discard.topCard}}
-          <div class="fvtt-ct-card-mini">
-            <img src="{{discard.topCard.img}}" alt="{{discard.topCard.name}}" />
-            <span class="fvtt-ct-card-mini-label">
-              {{#if discard.topCard.isFaceDown}}Carta Oculta / Queimada{{else}}{{discard.topCard.name}}{{/if}}
-            </span>
+      {{#if isStandard}}
+        <!-- PILHAS DE DESCARTE DO MODO PADRÃO (EXIBE TODAS AS QUE EXISTIREM NO MUNDO) -->
+        {{#each discardPiles as |dp|}}
+          <div class="fvtt-ct-zone-box fvtt-ct-discard-box {{#if dp.isTarget}}is-active-discard{{/if}}">
+            <div class="fvtt-ct-zone-title-row">
+              <h4>
+                <i class="fa-solid fa-recycle"></i> {{dp.name}} ({{dp.count}})
+              </h4>
+              <div class="fvtt-ct-zone-mini-actions">
+                {{#if ../hasMultipleDiscardPiles}}
+                  <button
+                    type="button"
+                    class="fvtt-ct-btn mini {{#if dp.isTarget}}active{{/if}}"
+                    data-action="selectDiscardTarget"
+                    data-pile-id="{{dp.id}}"
+                    title="Definir como pilha de descarte padrão"
+                  >
+                    {{#if dp.isTarget}}Alvo{{else}}Usar{{/if}}
+                  </button>
+                {{/if}}
+                <button type="button" class="fvtt-ct-icon-btn" data-action="openStackSheet" data-stack-id="{{dp.id}}" title="Abrir ficha nativa do Foundry">
+                  <i class="fa-solid fa-up-right-from-square"></i>
+                </button>
+              </div>
+            </div>
+
+            {{#if dp.topCard}}
+              <div class="fvtt-ct-card-mini">
+                <img src="{{dp.topCard.img}}" alt="{{dp.topCard.name}}" />
+                <div class="fvtt-ct-card-mini-info">
+                  <span class="fvtt-ct-card-mini-label">
+                    {{#if dp.topCard.isFaceDown}}Carta Virada{{else}}{{dp.topCard.name}}{{/if}}
+                  </span>
+                  <div class="fvtt-ct-zone-buttons">
+                    <button type="button" class="fvtt-ct-btn mini" data-action="drawTopDiscard" data-pile-id="{{dp.id}}" title="Pegar a carta do topo deste descarte para a sua mão">
+                      📥 Pegar Topo
+                    </button>
+                    <button type="button" class="fvtt-ct-btn mini" data-action="returnDiscardToDeck" data-pile-id="{{dp.id}}" title="Devolver todas as cartas deste descarte para o Baralho e embaralhar">
+                      🔄 p/ Deck
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {{else}}
+              <p class="fvtt-ct-empty">Pilha de descarte vazia</p>
+            {{/if}}
           </div>
         {{else}}
-          <p class="fvtt-ct-empty">Vazio</p>
-        {{/if}}
-      </div>
+          <div class="fvtt-ct-zone-box">
+            <h4><i class="fa-solid fa-recycle"></i> Pilhas de Descarte</h4>
+            <p class="fvtt-ct-empty">Nenhuma pilha de descarte separada no mundo.</p>
+            {{#if isGM}}
+              <button type="button" class="fvtt-ct-btn mini" data-action="createDiscardPile">
+                <i class="fa-solid fa-plus"></i> Criar Pilha de Descarte
+              </button>
+            {{/if}}
+          </div>
+        {{/each}}
+
+        <!-- LISTA DE MÃOS DOS JOGADORES NO MUNDO (MODO PADRÃO) -->
+        <div class="fvtt-ct-zone-box">
+          <h4><i class="fa-solid fa-hand"></i> Mãos dos Jogadores</h4>
+          <div class="fvtt-ct-player-list">
+            {{#each playerHandsList as |ph|}}
+              <div class="fvtt-ct-player-row">
+                <div class="fvtt-ct-player-info">
+                  <strong>{{ph.shortName}}</strong>
+                  <span class="fvtt-ct-player-bet">{{ph.count}} carta(s) na mão</span>
+                </div>
+                <div class="fvtt-ct-zone-mini-actions">
+                  {{#unless ph.isMine}}
+                    <button
+                      type="button"
+                      class="fvtt-ct-btn mini"
+                      data-action="passSelectedToHand"
+                      data-target-hand-id="{{ph.id}}"
+                      title="Passar carta(s) selecionada(s) da sua mão para {{ph.shortName}}"
+                    >
+                      👉 Passar
+                    </button>
+                  {{/unless}}
+                  {{#if ../isGM}}
+                    <button type="button" class="fvtt-ct-icon-btn" data-action="openStackSheet" data-stack-id="{{ph.id}}" title="Abrir ficha nativa da mão">
+                      <i class="fa-solid fa-up-right-from-square"></i>
+                    </button>
+                  {{/if}}
+                </div>
+              </div>
+            {{else}}
+              <p class="fvtt-ct-empty">Nenhuma mão criada ainda.</p>
+            {{/each}}
+          </div>
+        </div>
+      {{else}}
+        <div class="fvtt-ct-zone-box fvtt-ct-discard-box">
+          <h4>
+            <i class="fa-solid fa-fire"></i>
+            {{#if isBuraco}}Lixo ({{discard.count}}){{else if isPoker}}Queima / Muck ({{discard.count}}){{else}}Cemitério ({{discard.count}}){{/if}}
+          </h4>
+          {{#if discard.topCard}}
+            <div class="fvtt-ct-card-mini">
+              <img src="{{discard.topCard.img}}" alt="{{discard.topCard.name}}" />
+              <span class="fvtt-ct-card-mini-label">
+                {{#if discard.topCard.isFaceDown}}Carta Oculta / Queimada{{else}}{{discard.topCard.name}}{{/if}}
+              </span>
+            </div>
+          {{else}}
+            <p class="fvtt-ct-empty">Vazio</p>
+          {{/if}}
+        </div>
+      {{/if}}
 
       {{#if isPoker}}
         <!-- PLACAR DE FICHAS DOS JOGADORES E ENTREGA DO POTE -->
@@ -174,10 +318,35 @@
             {{/if}}
           {{else if isBuraco}}
             Jogos Baixados / Canastras — Pontos: <span class="fvtt-ct-badge-gold">{{battlefield.buracoScore.total}} pts</span>
+          {{else if isStandard}}
+            🃏 Pilha da Mesa: {{#if battlefield}}{{battlefield.name}} <span class="fvtt-ct-badge-gold">{{battlefield.cards.length}} carta(s)</span>{{else}}Nenhuma Pilha de Mesa{{/if}}
           {{else}}
             Campo de Batalha (TableZone)
           {{/if}}
         </h3>
+
+        {{#if isStandard}}
+          <div class="fvtt-ct-submode-tabs">
+            {{#if hasMultiplePiles}}
+              {{#each availableTablePiles as |tp|}}
+                <button
+                  type="button"
+                  class="fvtt-ct-btn mini {{#if tp.isSelected}}active{{/if}}"
+                  data-action="selectTablePile"
+                  data-pile-id="{{tp.id}}"
+                  title="Exibir a pilha {{tp.name}} como Pilha da Mesa"
+                >
+                  {{tp.name}} ({{tp.count}})
+                </button>
+              {{/each}}
+            {{/if}}
+            {{#if battlefield}}
+              <button type="button" class="fvtt-ct-btn mini" data-action="openStackSheet" data-stack-id="{{battlefield.id}}" title="Abrir janela nativa do Foundry para a Pilha da Mesa">
+                <i class="fa-solid fa-up-right-from-square"></i> Ficha da Mesa
+              </button>
+            {{/if}}
+          </div>
+        {{/if}}
 
         {{#if isPoker}}
           {{#if canSeeSoloPoker}}
@@ -391,6 +560,9 @@
             >
               <div class="fvtt-ct-card-image-wrap" data-action="toggleTapCard" title="Clique para Virar 90° (Tap/Untap)">
                 <img src="{{card.img}}" alt="{{card.name}}" />
+                {{#if card.playedBy}}
+                  <span class="fvtt-ct-meld-tag">{{card.playedBy}}</span>
+                {{/if}}
                 {{#if card.meldGroupId}}
                   <span class="fvtt-ct-meld-tag">Jogo #{{card.meldGroupId}}</span>
                 {{/if}}
@@ -398,9 +570,14 @@
                   <span class="fvtt-ct-counter-badge plus-one">+{{card.counters.plusOne}}/+{{card.counters.plusOne}}</span>
                 {{/if}}
               </div>
-              <div class="fvtt-ct-card-title">{{card.name}}</div>
+              <div class="fvtt-ct-card-title">{{#if card.isFaceDown}}Carta Virada{{else}}{{card.name}}{{/if}}</div>
               <div class="fvtt-ct-card-actions">
-                <button type="button" data-action="toggleTapCard" title="Tap / Untap (90°)">
+                {{#if ../isStandard}}
+                  <button type="button" data-action="takeCardToHand" title="Pegar carta da mesa para a sua mão">
+                    <i class="fa-solid fa-hand-holding"></i>
+                  </button>
+                {{/if}}
+                <button type="button" data-action="toggleTapCard" title="Girar 90° (Tap / Untap)">
                   <i class="fa-solid fa-rotate-right"></i>
                 </button>
                 <button type="button" data-action="flipCard" title="Virar Face/Verso">
@@ -414,7 +591,7 @@
                     -1
                   </button>
                 {{/if}}
-                <button type="button" data-action="discardCard" title="Enviar para Cemitério / Lixo">
+                <button type="button" data-action="discardCard" title="Enviar para Pilha de Descarte / Cemitério / Lixo">
                   <i class="fa-solid fa-trash"></i>
                 </button>
               </div>
@@ -505,12 +682,15 @@
           <div class="fvtt-ct-card-image-wrap" data-action="toggleSelectCard">
             <img src="{{card.img}}" alt="{{card.name}}" />
           </div>
-          <div class="fvtt-ct-card-title">{{card.name}}</div>
+          <div class="fvtt-ct-card-title">{{#if card.isFaceDown}}Carta Virada{{else}}{{card.name}}{{/if}}</div>
           <div class="fvtt-ct-card-actions">
-            <button type="button" data-action="playCardToTable" title="Revelar na Mesa / Showdown (Segure Shift para Baixar Virada)">
+            <button type="button" data-action="playCardToTable" title="Jogar na Pilha da Mesa (Segure Shift para Baixar Virada)">
               <i class="fa-solid fa-arrow-up"></i> Jogar
             </button>
-            <button type="button" data-action="discardCard" title="Desistir / Descartar (Fold)">
+            <button type="button" data-action="flipCard" title="Virar Face/Verso na Mão">
+              <i class="fa-solid fa-repeat"></i>
+            </button>
+            <button type="button" data-action="discardCard" title="Enviar para Pilha de Descarte">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>

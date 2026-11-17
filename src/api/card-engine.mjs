@@ -127,15 +127,20 @@ export class CardEngine {
       return list;
     };
 
-    let deck = game.cards.find(
-      (c) => c.type === "deck" && CardStateManager.getStackState(c).gameMode === mode
-    );
+    let deck =
+      game.cards.find(
+        (c) => c.type === "deck" && CardStateManager.getStackState(c).gameMode === mode
+      ) ??
+      (mode === "standard" ? game.cards.find((c) => c.type === "deck") : null);
 
     if (!deck) {
       let deckName = "Baralho Principal";
       let cardsData = [];
 
-      if (mode === "poker") {
+      if (mode === "standard") {
+        deckName = "Baralho Padrão (52 Cartas)";
+        cardsData = buildStandard52(1);
+      } else if (mode === "poker") {
         deckName = "Baralho de Poker (52 Cartas)";
         cardsData = buildStandard52(1);
       } else if (mode === "buraco") {
@@ -214,7 +219,14 @@ export class CardEngine {
     );
     if (!battlefieldPile) {
       battlefieldPile = await Cards.create({
-        name: mode === "poker" ? "Mesa Comunitária (Crupiê)" : mode === "buraco" ? "Jogos Baixados / Canastras" : "Campo de Batalha (TableZone)",
+        name:
+          mode === "standard"
+            ? "Pilha da Mesa"
+            : mode === "poker"
+              ? "Mesa Comunitária (Crupiê)"
+              : mode === "buraco"
+                ? "Jogos Baixados / Canastras"
+                : "Campo de Batalha (TableZone)",
         type: "pile",
         img: defaultImg,
         ownership: sharedOwnership,
@@ -237,11 +249,18 @@ export class CardEngine {
       (c) =>
         c.type === "pile" &&
         c.id !== battlefieldPile.id &&
-        ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType)
+        ["graveyard", "lixo", "burn", "discard"].includes(CardStateManager.getStackState(c).zoneType)
     );
     if (!discardPile) {
       discardPile = await Cards.create({
-        name: mode === "poker" ? "Queima / Descarte (Muck)" : mode === "buraco" ? "Lixo" : "Cemitério (Graveyard)",
+        name:
+          mode === "standard"
+            ? "Pilha de Descarte"
+            : mode === "poker"
+              ? "Queima / Descarte (Muck)"
+              : mode === "buraco"
+                ? "Lixo"
+                : "Cemitério (Graveyard)",
         type: "pile",
         img: defaultImg,
         ownership: sharedOwnership,
@@ -249,7 +268,14 @@ export class CardEngine {
           [MODULE_ID]: {
             stackState: {
               gameMode: mode,
-              zoneType: mode === "poker" ? "burn" : mode === "buraco" ? "lixo" : "graveyard"
+              zoneType:
+                mode === "standard"
+                  ? "discard"
+                  : mode === "poker"
+                    ? "burn"
+                    : mode === "buraco"
+                      ? "lixo"
+                      : "graveyard"
             }
           }
         }
@@ -1291,6 +1317,89 @@ export class CardEngine {
         canastraBonus,
         total: cardPoints + canastraBonus
       };
+    }
+  };
+
+  /* ======================================================================== */
+  /*  MODO PADRÃO (SISTEMA INTEGRADO NATIVO DO FOUNDRY VTT)                   */
+  /* ======================================================================== */
+
+  static standard = {
+    /**
+     * Distribui N cartas do Baralho para todas as mãos dos jogadores usando o método nativo deck.deal()
+     */
+    async dealToAllHands(deck, hands = [], count = 1, { faceDown = false } = {}) {
+      if (!deck || hands.length === 0) return;
+      const dealCount = Math.max(1, Number(count) || 1);
+      await deck.deal(hands, dealCount, {
+        how: CONST.CARD_DRAW_MODES.TOP,
+        updateData: { face: faceDown ? null : 0 },
+        chatNotification: true
+      });
+    },
+
+    /**
+     * Pega uma carta da Pilha da Mesa ou de qualquer Pilha de Descarte e traz para a Mão do jogador
+     */
+    async takeCardToHand(sourcePile, playerHand, cardId) {
+      if (!sourcePile || !playerHand || !cardId) return;
+      await sourcePile.pass(playerHand, [cardId], {
+        updateData: { face: 0 },
+        chatNotification: true
+      });
+    },
+
+    /**
+     * Passa cartas selecionadas da Mão do jogador para a Mão de outro jogador
+     */
+    async passToOtherHand(sourceHand, targetHand, cardIds = []) {
+      if (!sourceHand || !targetHand || cardIds.length === 0) return;
+      if (sourceHand.id === targetHand.id) return;
+      await sourceHand.pass(targetHand, cardIds, {
+        chatNotification: true
+      });
+    },
+
+    /**
+     * Devolve todas as cartas de uma Pilha de Descarte de volta para o Baralho e embaralha
+     */
+    async returnPileToDeck(pile, deck) {
+      if (!pile || !deck) return;
+      const cardIds = pile.cards.map((c) => c.id);
+      if (cardIds.length === 0) {
+        ui.notifications.warn(`A pilha "${pile.name}" já está vazia.`);
+        return;
+      }
+      await pile.pass(deck, cardIds, {
+        updateData: { face: 0 },
+        chatNotification: false
+      });
+      await deck.shuffle({ chatNotification: true });
+      ui.notifications.info(`${cardIds.length} carta(s) de "${pile.name}" devolvidas e embaralhadas em "${deck.name}".`);
+    },
+
+    /**
+     * Cria uma nova Pilha de Descarte integrada ao Foundry
+     */
+    async createDiscardPile(name = null) {
+      const existingDiscards = game.cards.filter(
+        (c) => c.type === "pile" && ["discard", "graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType)
+      );
+      const pileName = name || `Pilha de Descarte #${existingDiscards.length + 1}`;
+      return Cards.create({
+        name: pileName,
+        type: "pile",
+        img: "icons/sundries/gaming/playing-cards-grey.webp",
+        ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              gameMode: "standard",
+              zoneType: "discard"
+            }
+          }
+        }
+      });
     }
   };
 }
