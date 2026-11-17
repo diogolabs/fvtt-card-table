@@ -762,6 +762,405 @@ export class CardEngine {
       await ChatMessage.create({
         content: `<div class="fvtt-card-table-chat">🪙 <strong>Buy-in realizado:</strong> Todos os jogadores agora possuem <strong>${chips} fichas</strong> na banca!</div>`
       });
+    },
+
+    /* ====================================================================== */
+    /*  AVALIADOR OFICIAL DE MÃOS DE TEXAS HOLD'EM (5 A 7 CARTAS)             */
+    /* ====================================================================== */
+
+    rankLabel(val) {
+      const map = {
+        14: "Ás",
+        13: "Rei",
+        12: "Dama",
+        11: "Valete",
+        10: "10",
+        9: "9",
+        8: "8",
+        7: "7",
+        6: "6",
+        5: "5",
+        4: "4",
+        3: "3",
+        2: "2"
+      };
+      return map[val] ?? String(val);
+    },
+
+    evaluateFiveCards(five) {
+      const values = five.map((c) => Number(c.value)).sort((a, b) => b - a);
+      const suits = five.map((c) => c.suit);
+      const isFlush = suits.every((s) => s === suits[0]);
+
+      const uniqueVals = [...new Set(values)];
+      let isStraight = false;
+      let straightHigh = values[0];
+
+      if (uniqueVals.length === 5) {
+        if (uniqueVals[0] - uniqueVals[4] === 4) {
+          isStraight = true;
+          straightHigh = uniqueVals[0];
+        } else if (
+          uniqueVals[0] === 14 &&
+          uniqueVals[1] === 5 &&
+          uniqueVals[2] === 4 &&
+          uniqueVals[3] === 3 &&
+          uniqueVals[4] === 2
+        ) {
+          // Sequência Baixa A-2-3-4-5 (Wheel)
+          isStraight = true;
+          straightHigh = 5;
+        }
+      }
+
+      const counts = new Map();
+      for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+      const groups = [...counts.entries()].sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return b[0] - a[0];
+      });
+
+      const tiebreakers = groups.map((g) => g[0]);
+
+      if (isFlush && isStraight) {
+        if (straightHigh === 14) {
+          return { category: 9, name: "Royal Flush", tiebreakers: [14] };
+        }
+        return {
+          category: 8,
+          name: `Straight Flush (Alta de ${this.rankLabel(straightHigh)})`,
+          tiebreakers: [straightHigh]
+        };
+      }
+
+      if (groups[0][1] === 4) {
+        return {
+          category: 7,
+          name: `Quadra de ${this.rankLabel(groups[0][0])}`,
+          tiebreakers
+        };
+      }
+
+      if (groups[0][1] === 3 && groups[1][1] === 2) {
+        return {
+          category: 6,
+          name: `Full House (${this.rankLabel(groups[0][0])} e ${this.rankLabel(groups[1][0])})`,
+          tiebreakers
+        };
+      }
+
+      if (isFlush) {
+        return {
+          category: 5,
+          name: `Flush (Carta Alta ${this.rankLabel(values[0])})`,
+          tiebreakers: values
+        };
+      }
+
+      if (isStraight) {
+        return {
+          category: 4,
+          name: `Sequência (Alta de ${this.rankLabel(straightHigh)})`,
+          tiebreakers: [straightHigh]
+        };
+      }
+
+      if (groups[0][1] === 3) {
+        return {
+          category: 3,
+          name: `Trinca de ${this.rankLabel(groups[0][0])}`,
+          tiebreakers
+        };
+      }
+
+      if (groups[0][1] === 2 && groups[1][1] === 2) {
+        return {
+          category: 2,
+          name: `Dois Pares (${this.rankLabel(groups[0][0])} e ${this.rankLabel(groups[1][0])})`,
+          tiebreakers
+        };
+      }
+
+      if (groups[0][1] === 2) {
+        return {
+          category: 1,
+          name: `Par de ${this.rankLabel(groups[0][0])}`,
+          tiebreakers
+        };
+      }
+
+      return {
+        category: 0,
+        name: `Carta Alta (${this.rankLabel(values[0])})`,
+        tiebreakers: values
+      };
+    },
+
+    compareEvaluations(evalA, evalB) {
+      if (evalA.category !== evalB.category) {
+        return evalA.category > evalB.category ? 1 : -1;
+      }
+      const len = Math.max(evalA.tiebreakers.length, evalB.tiebreakers.length);
+      for (let i = 0; i < len; i++) {
+        const a = evalA.tiebreakers[i] ?? 0;
+        const b = evalB.tiebreakers[i] ?? 0;
+        if (a !== b) return a > b ? 1 : -1;
+      }
+      return 0;
+    },
+
+    evaluateBestHand(cards = []) {
+      if (!cards || cards.length < 5) {
+        if (!cards || cards.length === 0) return { category: -1, name: "Sem cartas", tiebreakers: [] };
+        const vals = cards.map((c) => Number(c.value)).sort((a, b) => b - a);
+        if (vals.length >= 2 && vals[0] === vals[1]) {
+          return { category: 1, name: `Par de ${this.rankLabel(vals[0])}`, tiebreakers: vals };
+        }
+        return { category: 0, name: `Carta Alta (${this.rankLabel(vals[0])})`, tiebreakers: vals };
+      }
+
+      let best = null;
+      const n = cards.length;
+      for (let i = 0; i < n - 4; i++) {
+        for (let j = i + 1; j < n - 3; j++) {
+          for (let k = j + 1; k < n - 2; k++) {
+            for (let l = k + 1; l < n - 1; l++) {
+              for (let m = l + 1; m < n; m++) {
+                const combo = [cards[i], cards[j], cards[k], cards[l], cards[m]];
+                const current = this.evaluateFiveCards(combo);
+                if (!best || this.compareEvaluations(current, best) > 0) {
+                  best = current;
+                }
+              }
+            }
+          }
+        }
+      }
+      return best;
+    },
+
+    /* ====================================================================== */
+    /*  MODO SOLO VS. CRUPIÊ (POTE ISOLADO — NÃO AFETA MESA MULTIPLAYER)      */
+    /* ====================================================================== */
+
+    buildSoloDeck() {
+      const defaultImg = "icons/sundries/gaming/playing-cards-grey.webp";
+      const suits = [
+        { key: "spades", symbol: "♠", label: "Espadas" },
+        { key: "hearts", symbol: "♥", label: "Copas" },
+        { key: "clubs", symbol: "♣", label: "Paus" },
+        { key: "diamonds", symbol: "♦", label: "Ouros" }
+      ];
+      const ranks = [
+        { value: 2, short: "2", name: "2" },
+        { value: 3, short: "3", name: "3" },
+        { value: 4, short: "4", name: "4" },
+        { value: 5, short: "5", name: "5" },
+        { value: 6, short: "6", name: "6" },
+        { value: 7, short: "7", name: "7" },
+        { value: 8, short: "8", name: "8" },
+        { value: 9, short: "9", name: "9" },
+        { value: 10, short: "10", name: "10" },
+        { value: 11, short: "J", name: "Valete (J)" },
+        { value: 12, short: "Q", name: "Dama (Q)" },
+        { value: 13, short: "K", name: "Rei (K)" },
+        { value: 14, short: "A", name: "Ás (A)" }
+      ];
+
+      const deck = [];
+      for (const s of suits) {
+        for (const r of ranks) {
+          deck.push({
+            id: `${r.short}${s.key[0].toUpperCase()}`,
+            name: `${r.name} de ${s.label} (${r.short}${s.symbol})`,
+            shortLabel: `${r.short}${s.symbol}`,
+            suit: s.key,
+            symbol: s.symbol,
+            isRed: s.key === "hearts" || s.key === "diamonds",
+            value: r.value,
+            img: defaultImg
+          });
+        }
+      }
+
+      // Embaralhamento Fisher-Yates
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
+    },
+
+    async startSoloHand(playerHand, ante = 10) {
+      if (!playerHand) return;
+      const isAllowed = game.settings.get(MODULE_ID, "allowSoloPoker") || game.user.isGM;
+      if (!isAllowed) {
+        ui.notifications.warn("O Modo Solo contra o Crupiê está desativado pelo GM.");
+        return;
+      }
+
+      const handState = CardStateManager.getStackState(playerHand);
+      const currentChips = handState.chips ?? 1000;
+      const betAnte = Math.min(Math.max(1, Number(ante) || 10), currentChips);
+
+      if (currentChips <= 0) {
+        ui.notifications.warn("Você não possui fichas suficientes para iniciar uma mão contra o Crupiê!");
+        return;
+      }
+
+      const deck = this.buildSoloDeck();
+      const playerCards = [deck.shift(), deck.shift()];
+      const dealerCards = [deck.shift(), deck.shift()];
+
+      const nextChips = currentChips - betAnte;
+      const soloPot = betAnte * 2; // O Crupiê (Banca) casa o mesmo valor do Ante no Pote Solo!
+
+      await CardStateManager.updateStackState(playerHand, {
+        chips: nextChips,
+        soloGame: {
+          active: true,
+          stage: "preflop",
+          pot: soloPot,
+          playerInvested: betAnte,
+          burnedCount: 0,
+          deck,
+          playerCards,
+          dealerCards,
+          communityCards: [],
+          lastResult: null
+        }
+      });
+
+      return soloPot;
+    },
+
+    async advanceSoloHand(playerHand, betAmount = 0, { runToShowdown = false } = {}) {
+      if (!playerHand) return;
+      const handState = CardStateManager.getStackState(playerHand);
+      const solo = foundry.utils.deepClone(handState.soloGame ?? {});
+
+      if (!solo.active || solo.stage === "idle" || solo.stage === "showdown") {
+        return;
+      }
+
+      let currentChips = handState.chips ?? 0;
+      const requestedBet = Math.max(0, Math.floor(Number(betAmount) || 0));
+      const actualBet = Math.min(requestedBet, currentChips);
+
+      if (actualBet > 0) {
+        currentChips -= actualBet;
+        solo.playerInvested = (solo.playerInvested ?? 0) + actualBet;
+        // O Crupiê cobre a aposta do jogador no Pote Solo (1:1)
+        solo.pot = (solo.pot ?? 0) + actualBet * 2;
+      }
+
+      const dealStreet = (currentStage) => {
+        if (currentStage === "preflop") {
+          solo.deck.shift(); // Queima 1
+          solo.burnedCount = (solo.burnedCount ?? 0) + 1;
+          solo.communityCards.push(solo.deck.shift(), solo.deck.shift(), solo.deck.shift());
+          return "flop";
+        }
+        if (currentStage === "flop") {
+          solo.deck.shift(); // Queima 1
+          solo.burnedCount = (solo.burnedCount ?? 0) + 1;
+          solo.communityCards.push(solo.deck.shift());
+          return "turn";
+        }
+        if (currentStage === "turn") {
+          solo.deck.shift(); // Queima 1
+          solo.burnedCount = (solo.burnedCount ?? 0) + 1;
+          solo.communityCards.push(solo.deck.shift());
+          return "river";
+        }
+        return "showdown";
+      };
+
+      if (runToShowdown) {
+        while (solo.stage !== "river" && solo.stage !== "showdown") {
+          solo.stage = dealStreet(solo.stage);
+        }
+        solo.stage = "showdown";
+      } else {
+        solo.stage = dealStreet(solo.stage);
+      }
+
+      // Se chegou no Showdown, combina as cartas do Jogador com a Mesa vs. Crupiê com a Mesa
+      if (solo.stage === "showdown") {
+        const playerEval = this.evaluateBestHand([...solo.playerCards, ...solo.communityCards]);
+        const dealerEval = this.evaluateBestHand([...solo.dealerCards, ...solo.communityCards]);
+        const cmp = this.compareEvaluations(playerEval, dealerEval);
+
+        let outcome = "lose";
+        let payout = 0;
+        let title = "";
+        let summary = "";
+
+        if (cmp > 0) {
+          outcome = "win";
+          payout = solo.pot;
+          currentChips += payout;
+          title = "🎉 VOCÊ VENCEU O CRUPIÊ!";
+          summary = `Seu jogo (${playerEval.name}) superou o jogo do Crupiê (${dealerEval.name})! Você ganhou o Pote Solo de ${payout} fichas.`;
+        } else if (cmp < 0) {
+          outcome = "lose";
+          payout = 0;
+          title = "🏦 O CRUPIÊ VENCEU!";
+          summary = `O Crupiê formou ${dealerEval.name} e superou seu jogo (${playerEval.name}). A Banca levou o Pote Solo de ${solo.pot} fichas.`;
+        } else {
+          outcome = "tie";
+          payout = Math.floor(solo.pot / 2);
+          currentChips += payout;
+          title = "🤝 EMPATE (SPLIT POT)!";
+          summary = `Ambos empataram com ${playerEval.name}! Suas ${payout} fichas voltaram para sua banca.`;
+        }
+
+        solo.lastResult = {
+          outcome,
+          title,
+          summary,
+          playerHandName: playerEval.name,
+          dealerHandName: dealerEval.name,
+          potTotal: solo.pot,
+          payout
+        };
+        solo.pot = 0;
+
+        await ChatMessage.create({
+          content: `<div class="fvtt-card-table-chat"><strong>🤖 Solo vs. Crupiê (${game.user.name}):</strong> ${title}<br/>• <strong>${game.user.name}:</strong> ${solo.playerCards.map((c) => c.shortLabel).join(" ")} → <em>${playerEval.name}</em><br/>• <strong>Crupiê:</strong> ${solo.dealerCards.map((c) => c.shortLabel).join(" ")} → <em>${dealerEval.name}</em><br/>• <strong>Mesa:</strong> ${solo.communityCards.map((c) => c.shortLabel).join(" ")}</div>`
+        });
+      }
+
+      await CardStateManager.updateStackState(playerHand, {
+        chips: currentChips,
+        soloGame: solo
+      });
+
+      return solo;
+    },
+
+    async foldSoloHand(playerHand) {
+      if (!playerHand) return;
+      const handState = CardStateManager.getStackState(playerHand);
+      const solo = foundry.utils.deepClone(handState.soloGame ?? {});
+      if (!solo.active || solo.stage === "idle" || solo.stage === "showdown") return;
+
+      const lostPot = solo.pot ?? 0;
+      solo.stage = "showdown";
+      solo.pot = 0;
+      solo.lastResult = {
+        outcome: "fold",
+        title: "🏳️ VOCÊ DESISTIU (FOLD)",
+        summary: `Você desistiu da mão e o Crupiê recolheu o Pote Solo de ${lostPot} fichas.`,
+        playerHandName: "Desistiu (Fold)",
+        dealerHandName: "Vencedor por desistência",
+        potTotal: lostPot,
+        payout: 0
+      };
+
+      await CardStateManager.updateStackState(playerHand, {
+        soloGame: solo
+      });
     }
   };
 

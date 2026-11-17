@@ -14,6 +14,10 @@
       "AutoSync": {
         "Name": "Sincronizar Baralhos com Compêndio ao Iniciar",
         "Hint": "Atualiza automaticamente cartas e metadados dos baralhos do Mundo quando o módulo recebe atualização via GitHub."
+      },
+      "AllowSoloPoker": {
+        "Name": "Liberar Modo Solo vs. Crupiê (Texas Hold'em)",
+        "Hint": "Quando ativo, permite que os jogadores joguem Texas Hold'em sozinhos contra o Crupiê em um Pote 100% isolado da mesa multiplayer."
       }
     },
     "Keybindings": {

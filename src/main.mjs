@@ -44,6 +44,20 @@ Hooks.once("init", () => {
     default: true
   });
 
+  game.settings.register(MODULE_ID, "allowSoloPoker", {
+    name: "FVTT_CARD_TABLE.Settings.AllowSoloPoker.Name",
+    hint: "FVTT_CARD_TABLE.Settings.AllowSoloPoker.Hint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: () => {
+      if (tabletopBoardInstance?.rendered) {
+        tabletopBoardInstance.render();
+      }
+    }
+  });
+
   game.keybindings.register(MODULE_ID, "openTabletopBoard", {
     name: "FVTT_CARD_TABLE.Keybindings.OpenBoard",
     editable: [{ key: "KeyK", modifiers: ["Control"] }],

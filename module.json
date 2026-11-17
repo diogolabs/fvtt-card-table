@@ -1,8 +1,8 @@
 {
   "id": "fvtt-card-table",
   "title": "DiogoLabs Card Table (Poker, Buraco, MTG & Cockatrice Engine) [v13]",
-  "description": "Sistema completo e agnóstico de manipulação de cartas adaptado para Foundry VTT v13. Inclui Crupiê Texas Hold'em (5 slots Flop/Turn/River + Showdown), Banca de Fichas por jogador (Check/Call, Fichas +10/+25/+50/+100, Valor Customizado, All-In, Fold, Zerar Pote e Entregar Pote ao Vencedor), Mãos Privadas e rolagem vertical.",
-  "version": "13.0.1",
+  "description": "Sistema completo e agnóstico de manipulação de cartas adaptado para Foundry VTT v13. Inclui Crupiê Texas Hold'em Multiplayer + Modo Solo vs. Crupiê (com Pote Isolado, controle de permissão exclusivo do GM e Avaliador Automático de Mãos), Banca de Fichas por jogador e Mãos Privadas.",
+  "version": "13.0.2",
   "compatibility": {
     "minimum": "13",
     "verified": "13",
@@ -55,7 +55,7 @@
   },
   "url": "https://github.com/diogolabs/fvtt-card-table",
   "manifest": "https://github.com/diogolabs/fvtt-card-table/releases/download/v13.0.0/module.json",
-  "download": "https://github.com/diogolabs/fvtt-card-table/releases/download/v13.0.1/module.zip",
+  "download": "https://github.com/diogolabs/fvtt-card-table/releases/download/v13.0.2/module.zip",
   "readme": "https://github.com/diogolabs/fvtt-card-table/blob/v13/README.md",
   "changelog": "https://github.com/diogolabs/fvtt-card-table/releases"
 }
