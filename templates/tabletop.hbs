@@ -1,39 +1,46 @@
 <div class="fvtt-card-table-container">
-  <!-- BARRA DE MODO DE JOGO E CONTROLES GLOBAIS -->
+  <!-- BARRA DE MODO DE JOGO (EXCLUSIVA DO GM) E CONTROLES DA PARTIDA -->
   <header class="fvtt-ct-toolbar">
     <div class="fvtt-ct-modes">
-      <button type="button" class="fvtt-ct-btn {{#if isPoker}}active{{/if}}" data-action="setGameMode" data-mode="poker">
-        <i class="fa-solid fa-coins"></i> Poker (Texas Hold'em)
-      </button>
-      <button type="button" class="fvtt-ct-btn {{#if isBuraco}}active{{/if}}" data-action="setGameMode" data-mode="buraco">
-        <i class="fa-solid fa-layer-group"></i> Buraco / Canastra
-      </button>
-      <button type="button" class="fvtt-ct-btn {{#if isMtg}}active{{/if}}" data-action="setGameMode" data-mode="mtg">
-        <i class="fa-solid fa-wand-magic-sparkles"></i> MTG / Cockatrice
-      </button>
-      <button type="button" class="fvtt-ct-btn primary" data-action="bootstrapZones" title="Cria Baralho, Mãos Privadas de cada jogador, Mesa e Descarte automaticamente">
-        <i class="fa-solid fa-magic"></i> Preparar Mesa ({{gameMode}})
-      </button>
+      {{#if isGM}}
+        <span class="fvtt-ct-gm-label"><i class="fa-solid fa-crown"></i> GM:</span>
+        <button type="button" class="fvtt-ct-btn {{#if isPoker}}active{{/if}}" data-action="setGameMode" data-mode="poker">
+          <i class="fa-solid fa-coins"></i> Poker
+        </button>
+        <button type="button" class="fvtt-ct-btn {{#if isBuraco}}active{{/if}}" data-action="setGameMode" data-mode="buraco">
+          <i class="fa-solid fa-layer-group"></i> Buraco
+        </button>
+        <button type="button" class="fvtt-ct-btn {{#if isMtg}}active{{/if}}" data-action="setGameMode" data-mode="mtg">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> MTG
+        </button>
+        <button type="button" class="fvtt-ct-btn primary" data-action="bootstrapZones" title="Cria Baralho, Mãos Privadas de cada jogador, Mesa e Descarte automaticamente">
+          <i class="fa-solid fa-magic"></i> Preparar Mesa
+        </button>
+      {{else}}
+        <span class="fvtt-ct-badge-gold"><i class="fa-solid fa-diamond"></i> {{gameModeLabel}}</span>
+      {{/if}}
     </div>
 
     <!-- AÇÕES ESPECÍFICAS DO MODO ATIVO -->
     <div class="fvtt-ct-mode-actions">
       {{#if isPoker}}
-        <button type="button" class="fvtt-ct-btn primary" data-action="pokerStartRound" title="Crupiê: Recolhe tudo, embaralha e dá 2 cartas privadas para cada jogador">
-          <i class="fa-solid fa-hat-wizard"></i> Nova Mão (Dar 2 Cartas)
-        </button>
-        <button type="button" class="fvtt-ct-btn primary" data-action="pokerStage" data-stage="auto" title="Crupiê queima 1 carta e abre a próxima etapa (Flop -> Turn -> River)">
-          <i class="fa-solid fa-forward-step"></i> Crupiê: Próxima Etapa
-        </button>
-        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="flop">
-          Flop (3)
-        </button>
-        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="turn">
-          Turn (1)
-        </button>
-        <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="river">
-          River (1)
-        </button>
+        {{#if isGM}}
+          <button type="button" class="fvtt-ct-btn primary" data-action="pokerStartRound" title="Crupiê: Recolhe tudo, embaralha e dá 2 cartas privadas para cada jogador">
+            <i class="fa-solid fa-hat-wizard"></i> Nova Mão (Dar 2 Cartas)
+          </button>
+          <button type="button" class="fvtt-ct-btn primary" data-action="pokerStage" data-stage="auto" title="Crupiê queima 1 carta e abre a próxima etapa (Flop -> Turn -> River)">
+            <i class="fa-solid fa-forward-step"></i> Crupiê: Próxima Etapa
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="flop">
+            Flop (3)
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="turn">
+            Turn (1)
+          </button>
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="river">
+            River (1)
+          </button>
+        {{/if}}
         <button type="button" class="fvtt-ct-btn" data-action="pokerBet" data-amount="10">
           +10 Pote
         </button>
@@ -58,9 +65,11 @@
       {{/if}}
 
       {{#if isBuraco}}
-        <button type="button" class="fvtt-ct-btn primary" data-action="buracoSetup">
-          <i class="fa-solid fa-play"></i> Distribuir Mesa (11 + Mortos)
-        </button>
+        {{#if isGM}}
+          <button type="button" class="fvtt-ct-btn primary" data-action="buracoSetup">
+            <i class="fa-solid fa-play"></i> Distribuir Mesa (11 + Mortos)
+          </button>
+        {{/if}}
         <button type="button" class="fvtt-ct-btn" data-action="buracoBuyTrash">
           <i class="fa-solid fa-hand-holding"></i> Comprar Lixo
         </button>
@@ -71,9 +80,9 @@
     </div>
   </header>
 
-  <!-- ÁREA CENTRAL: ZONAS LATERAIS (DECK + DESCARTE) E CAMPO DE BATALHA / MESA -->
+  <!-- ÁREA CENTRAL: ZONAS LATERAIS COMPACTAS (DECK + DESCARTE) E CAMPO DE BATALHA / MESA -->
   <div class="fvtt-ct-main-grid">
-    <!-- COLUNA ESQUERDA: BARALHO E LIXO/CEMITÉRIO/QUEIMA -->
+    <!-- COLUNA ESQUERDA COMPACTA: BARALHO E LIXO/CEMITÉRIO/QUEIMA -->
     <aside class="fvtt-ct-sidebar-zones">
       <div class="fvtt-ct-zone-box">
         <h4><i class="fa-solid fa-layer-group"></i> {{#if deck}}{{deck.name}}{{else}}Sem Baralho{{/if}}</h4>
@@ -82,14 +91,16 @@
           <div class="fvtt-ct-zone-buttons">
             <button type="button" class="fvtt-ct-btn" data-action="drawCard" data-count="1">Comprar 1</button>
             <button type="button" class="fvtt-ct-btn" data-action="shuffleDeck">Embaralhar</button>
-            <button type="button" class="fvtt-ct-btn" data-action="recallDeck">Resetar</button>
+            {{#if isGM}}
+              <button type="button" class="fvtt-ct-btn" data-action="recallDeck">Resetar</button>
+            {{/if}}
           </div>
         {{else}}
-          <p class="fvtt-ct-empty">Clique em <strong>"Preparar Mesa"</strong> no topo para criar tudo com 1 clique.</p>
+          <p class="fvtt-ct-empty">Peça ao GM para clicar em <strong>"Preparar Mesa"</strong>.</p>
         {{/if}}
       </div>
 
-      <div class="fvtt-ct-zone-box">
+      <div class="fvtt-ct-zone-box fvtt-ct-discard-box">
         <h4>
           <i class="fa-solid fa-fire"></i>
           {{#if isBuraco}}Lixo ({{discard.count}}){{else if isPoker}}Queima / Muck ({{discard.count}}){{else}}Cemitério ({{discard.count}}){{/if}}
@@ -97,7 +108,9 @@
         {{#if discard.topCard}}
           <div class="fvtt-ct-card-mini">
             <img src="{{discard.topCard.img}}" alt="{{discard.topCard.name}}" />
-            <span>{{#if discard.topCard.isFaceDown}}Carta Queimada (Oculta){{else}}{{discard.topCard.name}}{{/if}}</span>
+            <span class="fvtt-ct-card-mini-label">
+              {{#if discard.topCard.isFaceDown}}Carta Queimada{{else}}{{discard.topCard.name}}{{/if}}
+            </span>
           </div>
         {{else}}
           <p class="fvtt-ct-empty">Vazio</p>

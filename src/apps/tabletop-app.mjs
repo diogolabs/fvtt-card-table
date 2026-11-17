@@ -10,8 +10,11 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super(options);
-    this.activeGameMode = game.settings.get(MODULE_ID, "defaultGameMode") ?? "poker";
     this.selectedCardIds = new Set();
+  }
+
+  get activeGameMode() {
+    return game.settings.get(MODULE_ID, "defaultGameMode") ?? "poker";
   }
 
   static DEFAULT_OPTIONS = {
@@ -25,8 +28,8 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       minimizable: true
     },
     position: {
-      width: 1020,
-      height: 720
+      width: 960,
+      height: 660
     },
     actions: {
       setGameMode: TabletopBoardApp.#onSetGameMode,
@@ -57,24 +60,22 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
 
   static PARTS = {
     board: {
-      template: `modules/${MODULE_ID}/templates/tabletop.hbs`
+      template: `modules/${MODULE_ID}/templates/tabletop.hbs`,
+      scrollable: [".fvtt-card-table-container", ".fvtt-ct-battlefield", ".fvtt-ct-hand-dock"]
     }
   };
 
-  /**
-   * Localiza as zonas ativas garantindo que cada jogador veja apenas sua própria Mão Privada
-   */
   _resolveZones() {
+    const mode = this.activeGameMode;
     const decks = game.cards.filter((c) => c.type === "deck");
     const allHands = game.cards.filter((c) => c.type === "hand");
     const piles = game.cards.filter((c) => c.type === "pile");
 
     const mainDeck =
-      decks.find((d) => CardStateManager.getStackState(d).gameMode === this.activeGameMode) ??
+      decks.find((d) => CardStateManager.getStackState(d).gameMode === mode) ??
       decks[0] ??
       null;
 
-    // Prioriza a mão vinculada exclusivamente ao ID do usuário logado (evita que o GM veja a mão de outro jogador)
     const playerHand =
       allHands.find((h) => CardStateManager.getStackState(h).ownerUserId === game.user.id) ??
       allHands.find((h) => h.name === `Mão de ${game.user.name}`) ??
@@ -106,6 +107,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
     const zones = this._resolveZones();
+    const mode = this.activeGameMode;
 
     const formatCard = (card) => {
       const state = CardStateManager.getCardState(card);
@@ -130,10 +132,17 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       };
     };
 
-    context.gameMode = this.activeGameMode;
-    context.isMtg = this.activeGameMode === "mtg";
-    context.isPoker = this.activeGameMode === "poker";
-    context.isBuraco = this.activeGameMode === "buraco";
+    context.isGM = game.user.isGM;
+    context.gameMode = mode;
+    context.isMtg = mode === "mtg";
+    context.isPoker = mode === "poker";
+    context.isBuraco = mode === "buraco";
+    context.gameModeLabel =
+      mode === "poker"
+        ? "Poker (Texas Hold'em)"
+        : mode === "buraco"
+          ? "Buraco / Canastra"
+          : "Magic: The Gathering / Cockatrice";
     context.ccmActive = game.modules.get("complete-card-management")?.active ?? false;
 
     context.deck = zones.mainDeck
@@ -161,7 +170,6 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
           .map(formatCard)
       : [];
 
-    // Para o Poker: separa os 5 Slots do Crupiê (Flop 1-3, Turn 4, River 5) das cartas jogadas pelos jogadores (Showdown)
     const communityCards = allBattlefieldCards.filter((c) => c.boardRole !== "showdown");
     const showdownCards = allBattlefieldCards.filter((c) => c.boardRole === "showdown");
 
@@ -213,11 +221,14 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   /* ======================================================================== */
 
   static async #onSetGameMode(event, target) {
-    this.activeGameMode = target.dataset.mode || "poker";
+    if (!game.user.isGM) return;
+    const mode = target.dataset.mode || "poker";
+    await game.settings.set(MODULE_ID, "defaultGameMode", mode);
     await this.render();
   }
 
   static async #onBootstrapZones() {
+    if (!game.user.isGM) return;
     await CardEngine.bootstrapWorldZones(this.activeGameMode);
     await this.render();
   }
@@ -381,7 +392,6 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       const setup = await CardEngine.bootstrapWorldZones("poker");
       mainDeck = setup.deck;
     }
-    // Garante que cada jogador tenha sua mão privada e distribui 2 Hole Cards para cada um
     const playerHands = [];
     for (const u of game.users.contents) {
       const h = await CardEngine.ensureUserPrivateHand(u);

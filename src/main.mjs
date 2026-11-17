@@ -27,7 +27,12 @@ Hooks.once("init", () => {
       buraco: "Buraco / Canastra",
       mtg: "Magic: The Gathering / Cockatrice"
     },
-    default: "poker"
+    default: "poker",
+    onChange: () => {
+      if (tabletopBoardInstance?.rendered) {
+        tabletopBoardInstance.render();
+      }
+    }
   });
 
   game.settings.register(MODULE_ID, "autoSyncCompendiums", {
@@ -68,7 +73,6 @@ Hooks.once("ready", async () => {
     if (game.settings.get(MODULE_ID, "autoSyncCompendiums")) {
       await CardEngine.syncWorldDecksWithCompendium({ notify: true });
     }
-    // Garante que cada jogador cadastrado tenha sua própria Mão Privada configurada
     for (const u of game.users.contents) {
       await CardEngine.ensureUserPrivateHand(u);
     }
