@@ -69,9 +69,78 @@
   font-weight: 600;
 }
 
+.fvtt-ct-btn.danger {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.fvtt-ct-btn.danger:hover {
+  background: #b91c1c;
+}
+
+.fvtt-ct-btn.allin-btn {
+  background: linear-gradient(135deg, #d97706, #b91c1c);
+  border-color: #fde047;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* FICHAS REDONDAS DE APOSTA (+10, +25, +50, +100) */
+.fvtt-ct-chip-btn {
+  width: 34px;
+  height: 30px;
+  border-radius: 15px;
+  border: 2px dashed #fff;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.fvtt-ct-chip-btn.chip-10 {
+  background: #1d4ed8;
+}
+
+.fvtt-ct-chip-btn.chip-25 {
+  background: #15803d;
+}
+
+.fvtt-ct-chip-btn.chip-50 {
+  background: #b91c1c;
+}
+
+.fvtt-ct-chip-btn.chip-100 {
+  background: #18181b;
+  border-color: #facc15;
+  color: #facc15;
+}
+
+.fvtt-ct-custom-bet-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fvtt-ct-custom-bet-input {
+  width: 58px !important;
+  height: 26px !important;
+  padding: 2px 6px !important;
+  font-size: 12px !important;
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 4px !important;
+}
+
 .fvtt-ct-main-grid {
   display: grid;
-  grid-template-columns: 185px 1fr;
+  grid-template-columns: 200px 1fr;
   gap: 10px;
   align-items: start;
 }
@@ -100,9 +169,9 @@
   color: #ccc;
 }
 
-/* Área de Descarte / Queima compacta para nunca estourar o tamanho */
+/* Área de Descarte / Queima compacta */
 .fvtt-ct-discard-box {
-  max-height: 150px;
+  max-height: 140px;
 }
 
 .fvtt-ct-card-mini {
@@ -130,6 +199,58 @@
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* PLACAR DE FICHAS DOS JOGADORES */
+.fvtt-ct-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fvtt-ct-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.fvtt-ct-player-row.is-folded {
+  opacity: 0.55;
+}
+
+.fvtt-ct-player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fvtt-ct-player-chips {
+  color: #facc15;
+  font-weight: 700;
+}
+
+.fvtt-ct-player-bet {
+  font-size: 10px;
+  color: #93c5fd;
+}
+
+.fvtt-ct-folded-tag {
+  font-size: 9px;
+  color: #f87171;
+  font-weight: 700;
+}
+
+.fvtt-ct-btn.award-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: #ca8a04;
+  color: #111;
+  font-weight: 700;
 }
 
 .fvtt-ct-battlefield {
@@ -203,6 +324,15 @@
   border-radius: 12px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.fvtt-ct-current-bet-badge {
+  background: rgba(29, 78, 216, 0.85);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin-left: 6px;
 }
 
 .fvtt-ct-card-grid,
@@ -310,7 +440,39 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 6px;
+}
+
+.fvtt-ct-hand-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-hand-title-group h4 {
+  margin: 0;
+}
+
+.fvtt-ct-chip-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+
+.fvtt-ct-wallet-balance strong {
+  color: #facc15;
+}
+
+.fvtt-ct-wallet-round strong {
+  color: #93c5fd;
 }
 
 .fvtt-ct-scry-container {

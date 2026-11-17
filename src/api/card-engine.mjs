@@ -13,8 +13,7 @@ export class CardEngine {
 
   /**
    * Busca ou cria uma Mão Privada exclusiva para um jogador específico,
-   * garantindo que outros jogadores tenham permissão NONE (não vejam as cartas dele)
-   * e que até o GM tenha sua própria mão separada da dos jogadores.
+   * garantindo permissão privada e banca inicial de 1.000 fichas.
    * @param {User} user
    */
   static async ensureUserPrivateHand(user = game.user) {
@@ -25,7 +24,6 @@ export class CardEngine {
     );
 
     if (!hand) {
-      // Verifica se já existe uma mão com o nome exato ou onde apenas esse jogador (não-GM) é OWNER
       hand = game.cards.find(
         (c) =>
           c.type === "hand" &&
@@ -49,15 +47,20 @@ export class CardEngine {
           [MODULE_ID]: {
             stackState: {
               zoneType: "hand",
-              ownerUserId: user.id
+              ownerUserId: user.id,
+              chips: 1000,
+              roundBet: 0,
+              folded: false
             }
           }
         }
       });
     } else if (game.user.isGM) {
+      const currentState = CardStateManager.getStackState(hand);
       await hand.update({
         ownership: privateOwnership,
-        [`flags.${MODULE_ID}.stackState.ownerUserId`]: user.id
+        [`flags.${MODULE_ID}.stackState.ownerUserId`]: user.id,
+        [`flags.${MODULE_ID}.stackState.chips`]: currentState.chips ?? 1000
       });
     }
 
@@ -65,8 +68,7 @@ export class CardEngine {
   }
 
   /**
-   * Garante que todas as zonas da mesa (Baralho, Mãos Privadas de cada jogador ativo,
-   * Mesa Comunitária/Campo de Batalha e Descarte/Queima/Lixo) existam e tenham permissão correta.
+   * Garante que todas as zonas da mesa existam e tenham permissão compartilhada correta.
    * @param {"mtg"|"poker"|"buraco"} mode
    */
   static async bootstrapWorldZones(mode = "poker") {
@@ -198,15 +200,15 @@ export class CardEngine {
         flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "library" } } }
       });
       await deck.shuffle({ chatNotification: false });
+    } else if (game.user.isGM) {
+      await deck.update({ ownership: sharedOwnership });
     }
 
-    // Cria uma Mão Privada para cada usuário ativo (ou todos os usuários cadastrados se for GM)
     const targetUsers = game.user.isGM ? game.users.contents : [game.user];
     for (const u of targetUsers) {
       await this.ensureUserPrivateHand(u);
     }
 
-    // Garante a Pilha de Mesa Comunitária / Campo de Batalha
     let battlefieldPile = game.cards.find(
       (c) => c.type === "pile" && ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(c).zoneType)
     );
@@ -221,14 +223,16 @@ export class CardEngine {
             stackState: {
               gameMode: mode,
               zoneType: mode === "poker" ? "community" : mode === "buraco" ? "meld" : "battlefield",
-              pot: 0
+              pot: 0,
+              currentBet: 0
             }
           }
         }
       });
+    } else if (game.user.isGM) {
+      await battlefieldPile.update({ ownership: sharedOwnership });
     }
 
-    // Garante a Pilha de Descarte / Queima / Lixo (separada da Mesa!)
     let discardPile = game.cards.find(
       (c) =>
         c.type === "pile" &&
@@ -250,6 +254,8 @@ export class CardEngine {
           }
         }
       });
+    } else if (game.user.isGM) {
+      await discardPile.update({ ownership: sharedOwnership });
     }
 
     if (mode === "buraco" && !game.cards.some((c) => c.type === "pile" && CardStateManager.getStackState(c).zoneType === "morto")) {
@@ -262,7 +268,7 @@ export class CardEngine {
       });
     }
 
-    ui.notifications.info(`Mesa de ${mode.toUpperCase()} pronta! Mãos privadas configuradas por jogador.`);
+    ui.notifications.info(`Mesa de ${mode.toUpperCase()} pronta! Mãos privadas e bancas de fichas configuradas.`);
     return { deck, battlefieldPile, discardPile };
   }
 
@@ -306,7 +312,7 @@ export class CardEngine {
     const pack = game.packs.get(`${MODULE_ID}.decks`);
     if (!pack) return 0;
 
-    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.1";
+    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.3";
     const packDocs = await pack.getDocuments();
     let updatedCount = 0;
 
@@ -493,19 +499,29 @@ export class CardEngine {
   };
 
   /* ======================================================================== */
-  /*  MECÂNICAS DE POKER & CRUPIÊ (TEXAS HOLD'EM / OMAHA)                     */
+  /*  MECÂNICAS DE POKER, FICHAS, POTE & CRUPIÊ (TEXAS HOLD'EM / OMAHA)       */
   /* ======================================================================== */
 
   static poker = {
     /**
-     * Crupiê: Inicia uma nova rodada de Texas Hold'em
-     * - Recolhe todas as cartas da mesa, queima e mãos para o baralho
-     * - Embaralha o baralho
-     * - Distribui 2 Hole Cards fechadas na Mão Privada de cada jogador
+     * Crupiê: Inicia uma nova mão de Texas Hold'em
      */
-    async startRound(deck, playerHands = [], holeCardCount = 2) {
+    async startRound(deck, playerHands = [], communityPile = null, holeCardCount = 2) {
       await deck.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: false });
+
+      for (const hand of playerHands) {
+        await CardStateManager.updateStackState(hand, {
+          roundBet: 0,
+          folded: false
+        });
+      }
+
+      if (communityPile) {
+        await CardStateManager.updateStackState(communityPile, {
+          currentBet: 0
+        });
+      }
 
       if (playerHands.length > 0) {
         await deck.deal(playerHands, holeCardCount, {
@@ -515,20 +531,18 @@ export class CardEngine {
       }
 
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (Texas Hold'em):</strong> Nova mão iniciada! Baralho embaralhado e ${holeCardCount} cartas privadas distribuídas para ${playerHands.length} jogador(es). Faça suas apostas (Pré-Flop)!</div>`
+        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (Texas Hold'em):</strong> Nova mão iniciada! Baralho embaralhado e ${holeCardCount} cartas privadas distribuídas para ${playerHands.length} jogador(es). Apostas da rodada zeradas!</div>`
       });
     },
 
     /**
-     * Crupiê: Queima 1 carta (Burn) e abre as cartas comunitárias no centro da mesa
-     * (Flop = Slots 1, 2 e 3 | Turn = Slot 4 | River = Slot 5)
+     * Crupiê: Queima 1 carta e abre Flop (3), Turn (1) ou River (1), zerando a aposta da rodada anterior
      */
-    async dealCommunity(deck, burnPile, communityPile, stage = "flop") {
+    async dealCommunity(deck, burnPile, communityPile, stage = "flop", playerHands = []) {
       const existingCommunity = communityPile.cards.filter(
         (c) => CardStateManager.getCardState(c).boardRole !== "showdown"
       );
 
-      // Se o estágio for "auto", o Crupiê descobre sozinho se é Flop (0->3), Turn (3->4) ou River (4->5)
       if (stage === "auto") {
         if (existingCommunity.length === 0) stage = "flop";
         else if (existingCommunity.length < 4) stage = "turn";
@@ -539,7 +553,6 @@ export class CardEngine {
         }
       }
 
-      // 1. Crupiê queima 1 carta virada para baixo (Burn Card)
       if (burnPile && burnPile.id !== communityPile.id && deck.availableCards.length > 0) {
         await burnPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -548,7 +561,6 @@ export class CardEngine {
         });
       }
 
-      // 2. Crupiê abre as cartas comunitárias na mesa e marca como "community"
       const count = stage === "flop" ? 3 : 1;
       const startSlot = existingCommunity.length + 1;
       const drawn = await communityPile.draw(deck, count, {
@@ -560,7 +572,6 @@ export class CardEngine {
         chatNotification: false
       });
 
-      // Numera os slots do Crupiê (1..5)
       const slotUpdates = drawn.map((c, idx) => ({
         _id: c.id,
         [`flags.${MODULE_ID}.state.boardRole`]: "community",
@@ -570,23 +581,187 @@ export class CardEngine {
         await communityPile.updateEmbeddedDocuments("Card", slotUpdates);
       }
 
+      // Nova street (Flop/Turn/River) zera a aposta da rodada atual mantendo o Pote acumulado
+      await CardStateManager.updateStackState(communityPile, { currentBet: 0 });
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, { roundBet: 0 });
+      }
+
       await ChatMessage.create({
         content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (${stage.toUpperCase()}):</strong> Queimou 1 carta e abriu ${drawn.map((c) => `<strong>[${c.name}]</strong>`).join(" ")} na mesa comunitária!</div>`
       });
       return drawn;
     },
 
-    async bet(communityPile, amount, playerName = game.user.name) {
-      const state = CardStateManager.getStackState(communityPile);
-      const nextPot = (state.pot ?? 0) + Number(amount);
+    /**
+     * Jogador aposta fichas da própria banca (Stack) para o Pote da mesa
+     */
+    async bet(communityPile, playerHand, amount, { isCall = false, isAllIn = false, playerName = game.user.name } = {}) {
+      const requested = Math.max(0, Math.floor(Number(amount) || 0));
+      if (requested <= 0) return;
+
+      const tableState = CardStateManager.getStackState(communityPile);
+      let actualBet = requested;
+      let remainingChips = null;
+      let nextPlayerRoundBet = requested;
+
+      if (playerHand) {
+        const handState = CardStateManager.getStackState(playerHand);
+        const currentChips = handState.chips ?? 1000;
+        if (currentChips <= 0) {
+          ui.notifications.warn("Você não possui fichas suficientes na sua banca!");
+          return;
+        }
+        actualBet = Math.min(requested, currentChips);
+        remainingChips = currentChips - actualBet;
+        nextPlayerRoundBet = (handState.roundBet ?? 0) + actualBet;
+
+        await CardStateManager.updateStackState(playerHand, {
+          chips: remainingChips,
+          roundBet: nextPlayerRoundBet
+        });
+      }
+
+      const nextPot = (tableState.pot ?? 0) + actualBet;
+      const nextCurrentBet = Math.max(tableState.currentBet ?? 0, nextPlayerRoundBet);
+
       await CardStateManager.updateStackState(communityPile, {
         pot: nextPot,
-        currentBet: Number(amount)
+        currentBet: nextCurrentBet
       });
+
+      const actionTag =
+        isAllIn || remainingChips === 0
+          ? "🔥 deu ALL-IN de"
+          : isCall
+            ? "pagou (Call)"
+            : "apostou";
+
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>${playerName}</strong> apostou <strong>${amount} fichas</strong>. Pote Total: <strong>${nextPot}</strong>.</div>`
+        content: `<div class="fvtt-card-table-chat">🪙 <strong>${playerName}</strong> ${actionTag} <strong>${actualBet} fichas</strong> (Na rodada: ${nextPlayerRoundBet} | Restante: ${remainingChips ?? "—"}).<br/>💰 <strong>Pote Total: ${nextPot} fichas</strong> (Aposta a pagar: ${nextCurrentBet}).</div>`
       });
       return nextPot;
+    },
+
+    /**
+     * Jogador dá Check (se já igualou a aposta da rodada) ou Call (paga a diferença exata)
+     */
+    async checkOrCall(communityPile, playerHand, playerName = game.user.name) {
+      if (!communityPile || !playerHand) return;
+      const tableState = CardStateManager.getStackState(communityPile);
+      const handState = CardStateManager.getStackState(playerHand);
+      const toCall = Math.max(0, (tableState.currentBet ?? 0) - (handState.roundBet ?? 0));
+
+      if (toCall === 0) {
+        await ChatMessage.create({
+          content: `<div class="fvtt-card-table-chat">✊ <strong>${playerName}</strong> deu <strong>Check (Mesa)</strong>.</div>`
+        });
+        return 0;
+      }
+      return this.bet(communityPile, playerHand, toCall, { isCall: true, playerName });
+    },
+
+    /**
+     * Jogador aposta todas as fichas restantes (All-In)
+     */
+    async allIn(communityPile, playerHand, playerName = game.user.name) {
+      if (!communityPile || !playerHand) return;
+      const handState = CardStateManager.getStackState(playerHand);
+      const allChips = handState.chips ?? 0;
+      if (allChips <= 0) {
+        ui.notifications.warn("Você não tem fichas para dar All-In!");
+        return;
+      }
+      return this.bet(communityPile, playerHand, allChips, { isAllIn: true, playerName });
+    },
+
+    /**
+     * Jogador desiste da mão (Fold): envia todas as cartas da mão viradas para baixo para o Muck/Descarte
+     */
+    async fold(playerHand, discardPile, playerName = game.user.name) {
+      if (!playerHand) return;
+      const cardIds = playerHand.cards.map((c) => c.id);
+      if (cardIds.length > 0 && discardPile) {
+        await playerHand.pass(discardPile, cardIds, {
+          updateData: { face: null },
+          chatNotification: false
+        });
+      }
+      await CardStateManager.updateStackState(playerHand, { folded: true });
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🏳️ <strong>${playerName}</strong> desistiu da mão (<strong>Fold</strong>).</div>`
+      });
+    },
+
+    /**
+     * Zera o Pote e as apostas da rodada atual
+     */
+    async resetPot(communityPile, playerHands = []) {
+      if (!communityPile) return;
+      await CardStateManager.updateStackState(communityPile, {
+        pot: 0,
+        currentBet: 0
+      });
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, { roundBet: 0 });
+      }
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🧹 <strong>Pote da mesa zerado pelo Crupiê.</strong></div>`
+      });
+    },
+
+    /**
+     * Transfere todas as fichas do Pote para a banca do jogador vencedor e zera o Pote
+     */
+    async awardPot(communityPile, winnerHand, allPlayerHands = []) {
+      if (!communityPile || !winnerHand) return;
+      const tableState = CardStateManager.getStackState(communityPile);
+      const potAmount = tableState.pot ?? 0;
+      if (potAmount <= 0) {
+        ui.notifications.warn("O Pote está vazio (0 fichas).");
+        return;
+      }
+
+      const winnerState = CardStateManager.getStackState(winnerHand);
+      const newChips = (winnerState.chips ?? 0) + potAmount;
+
+      await CardStateManager.updateStackState(winnerHand, {
+        chips: newChips,
+        roundBet: 0
+      });
+
+      await CardStateManager.updateStackState(communityPile, {
+        pot: 0,
+        currentBet: 0
+      });
+
+      for (const h of allPlayerHands) {
+        if (h.id !== winnerHand.id) {
+          await CardStateManager.updateStackState(h, { roundBet: 0 });
+        }
+      }
+
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🏆 <strong>${winnerHand.name}</strong> venceu o Pote de <strong>${potAmount} fichas</strong>! (Nova banca: <strong>${newChips} fichas</strong>).</div>`
+      });
+      return newChips;
+    },
+
+    /**
+     * Define ou reseta a banca de fichas (Buy-in / Rebuy) para todas as mãos de jogadores
+     */
+    async buyInAll(playerHands = [], amount = 1000) {
+      const chips = Math.max(0, Math.floor(Number(amount) || 1000));
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, {
+          chips,
+          roundBet: 0,
+          folded: false
+        });
+      }
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🪙 <strong>Buy-in realizado:</strong> Todos os jogadores agora possuem <strong>${chips} fichas</strong> na banca!</div>`
+      });
     }
   };
 

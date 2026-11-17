@@ -4,7 +4,7 @@ import { CardEngine } from "../api/card-engine.mjs";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
- * Interface Principal de Mesa Virtual, Crupiê Texas Hold'em e Hand Dock
+ * Interface Principal de Mesa Virtual, Crupiê Texas Hold'em, Banca de Fichas e Hand Dock
  * Construída em ApplicationV2 nativa do Foundry VTT (v13/v14)
  */
 export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -28,8 +28,8 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       minimizable: true
     },
     position: {
-      width: 960,
-      height: 660
+      width: 980,
+      height: 680
     },
     actions: {
       setGameMode: TabletopBoardApp.#onSetGameMode,
@@ -52,6 +52,13 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       pokerStartRound: TabletopBoardApp.#onPokerStartRound,
       pokerStage: TabletopBoardApp.#onPokerStage,
       pokerBet: TabletopBoardApp.#onPokerBet,
+      pokerCustomBet: TabletopBoardApp.#onPokerCustomBet,
+      pokerCheckOrCall: TabletopBoardApp.#onPokerCheckOrCall,
+      pokerAllIn: TabletopBoardApp.#onPokerAllIn,
+      pokerFold: TabletopBoardApp.#onPokerFold,
+      pokerResetPot: TabletopBoardApp.#onPokerResetPot,
+      pokerAwardPot: TabletopBoardApp.#onPokerAwardPot,
+      pokerBuyInAll: TabletopBoardApp.#onPokerBuyInAll,
       buracoSetup: TabletopBoardApp.#onBuracoSetup,
       buracoBuyTrash: TabletopBoardApp.#onBuracoBuyTrash,
       buracoPlayMeld: TabletopBoardApp.#onBuracoPlayMeld
@@ -154,15 +161,43 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
         }
       : null;
 
+    const tableStackState = zones.battlefieldPile
+      ? CardStateManager.getStackState(zones.battlefieldPile)
+      : { pot: 0, currentBet: 0 };
+
+    const handStackState = zones.playerHand
+      ? CardStateManager.getStackState(zones.playerHand)
+      : { chips: 1000, roundBet: 0, folded: false };
+
+    const toCall = Math.max(0, (tableStackState.currentBet ?? 0) - (handStackState.roundBet ?? 0));
+
     context.hand = zones.playerHand
       ? {
           id: zones.playerHand.id,
           name: zones.playerHand.name,
+          chips: handStackState.chips ?? 1000,
+          roundBet: handStackState.roundBet ?? 0,
+          folded: handStackState.folded ?? false,
+          toCall,
+          canCheck: toCall === 0,
           cards: [...zones.playerHand.cards.contents]
             .sort((a, b) => a.sort - b.sort)
             .map(formatCard)
         }
       : null;
+
+    // Lista de bancas de fichas de todos os jogadores na mesa (para exibir placar e entregar Pote)
+    context.playerChipStacks = zones.allHands.map((h) => {
+      const st = CardStateManager.getStackState(h);
+      return {
+        handId: h.id,
+        name: h.name.replace(/^Mão de\s+/i, ""),
+        chips: st.chips ?? 1000,
+        roundBet: st.roundBet ?? 0,
+        folded: st.folded ?? false,
+        cardCount: h.cards.size
+      };
+    });
 
     const allBattlefieldCards = zones.battlefieldPile
       ? [...zones.battlefieldPile.cards.contents]
@@ -193,7 +228,8 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       ? {
           id: zones.battlefieldPile.id,
           name: zones.battlefieldPile.name,
-          pot: CardStateManager.getStackState(zones.battlefieldPile).pot ?? 0,
+          pot: tableStackState.pot ?? 0,
+          currentBet: tableStackState.currentBet ?? 0,
           buracoScore: context.isBuraco
             ? CardEngine.buraco.calculateTeamScore(zones.battlefieldPile)
             : null,
@@ -386,23 +422,28 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     await this.render();
   }
 
+  /* ======================================================================== */
+  /*  ACTIONS DE POKER (CRUPIÊ, FICHAS, APOSTAS E POTE)                       */
+  /* ======================================================================== */
+
   static async #onPokerStartRound() {
-    let { mainDeck } = this._resolveZones();
-    if (!mainDeck) {
+    let { mainDeck, battlefieldPile } = this._resolveZones();
+    if (!mainDeck || !battlefieldPile) {
       const setup = await CardEngine.bootstrapWorldZones("poker");
       mainDeck = setup.deck;
+      battlefieldPile = setup.battlefieldPile;
     }
     const playerHands = [];
     for (const u of game.users.contents) {
       const h = await CardEngine.ensureUserPrivateHand(u);
       if (h) playerHands.push(h);
     }
-    await CardEngine.poker.startRound(mainDeck, playerHands, 2);
+    await CardEngine.poker.startRound(mainDeck, playerHands, battlefieldPile, 2);
     await this.render();
   }
 
   static async #onPokerStage(event, target) {
-    let { mainDeck, battlefieldPile, discardPile } = this._resolveZones();
+    let { mainDeck, battlefieldPile, discardPile, allHands } = this._resolveZones();
     if (!mainDeck || !battlefieldPile || !discardPile) {
       const setup = await CardEngine.bootstrapWorldZones("poker");
       mainDeck = setup.deck;
@@ -410,20 +451,95 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       discardPile = setup.discardPile;
     }
     const stage = target.dataset.stage || "auto";
-    await CardEngine.poker.dealCommunity(mainDeck, discardPile, battlefieldPile, stage);
+    await CardEngine.poker.dealCommunity(mainDeck, discardPile, battlefieldPile, stage, allHands);
     await this.render();
   }
 
   static async #onPokerBet(event, target) {
-    let { battlefieldPile } = this._resolveZones();
+    let { battlefieldPile, playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
     if (!battlefieldPile) {
       const setup = await CardEngine.bootstrapWorldZones("poker");
       battlefieldPile = setup.battlefieldPile;
     }
     const amount = Number(target.dataset.amount ?? 10);
-    await CardEngine.poker.bet(battlefieldPile, amount);
+    await CardEngine.poker.bet(battlefieldPile, playerHand, amount);
     await this.render();
   }
+
+  static async #onPokerCustomBet(event, target) {
+    let { battlefieldPile, playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    if (!battlefieldPile) {
+      const setup = await CardEngine.bootstrapWorldZones("poker");
+      battlefieldPile = setup.battlefieldPile;
+    }
+    const input = this.element.querySelector(".fvtt-ct-custom-bet-input");
+    const amount = Number(input?.value ?? 0);
+    if (amount <= 0) {
+      ui.notifications.warn("Digite um valor de fichas válido para apostar.");
+      return;
+    }
+    await CardEngine.poker.bet(battlefieldPile, playerHand, amount);
+    await this.render();
+  }
+
+  static async #onPokerCheckOrCall() {
+    let { battlefieldPile, playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    if (!battlefieldPile) return;
+    await CardEngine.poker.checkOrCall(battlefieldPile, playerHand);
+    await this.render();
+  }
+
+  static async #onPokerAllIn() {
+    let { battlefieldPile, playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    if (!battlefieldPile) return;
+    await CardEngine.poker.allIn(battlefieldPile, playerHand);
+    await this.render();
+  }
+
+  static async #onPokerFold() {
+    let { playerHand, discardPile } = this._resolveZones();
+    if (!playerHand) return;
+    if (!discardPile) {
+      const setup = await CardEngine.bootstrapWorldZones("poker");
+      discardPile = setup.discardPile;
+    }
+    await CardEngine.poker.fold(playerHand, discardPile);
+    await this.render();
+  }
+
+  static async #onPokerResetPot() {
+    if (!game.user.isGM) return;
+    const { battlefieldPile, allHands } = this._resolveZones();
+    if (!battlefieldPile) return;
+    await CardEngine.poker.resetPot(battlefieldPile, allHands);
+    await this.render();
+  }
+
+  static async #onPokerAwardPot(event, target) {
+    if (!game.user.isGM) return;
+    const { battlefieldPile, allHands } = this._resolveZones();
+    const winnerHandId = target.dataset.handId;
+    const winnerHand = allHands.find((h) => h.id === winnerHandId);
+    if (!battlefieldPile || !winnerHand) return;
+    await CardEngine.poker.awardPot(battlefieldPile, winnerHand, allHands);
+    await this.render();
+  }
+
+  static async #onPokerBuyInAll(event, target) {
+    if (!game.user.isGM) return;
+    const { allHands } = this._resolveZones();
+    const amount = Number(target.dataset.amount ?? 1000);
+    await CardEngine.poker.buyInAll(allHands, amount);
+    await this.render();
+  }
+
+  /* ======================================================================== */
+  /*  ACTIONS DE BURACO                                                       */
+  /* ======================================================================== */
 
   static async #onBuracoSetup() {
     let { mainDeck, battlefieldPile, discardPile, secondaryPile } = this._resolveZones();

@@ -21,32 +21,26 @@
       {{/if}}
     </div>
 
-    <!-- AÇÕES ESPECÍFICAS DO MODO ATIVO -->
+    <!-- AÇÕES ESPECÍFICAS DO MODO ATIVO (CONTROLES DO CRUPIÊ / GM) -->
     <div class="fvtt-ct-mode-actions">
       {{#if isPoker}}
         {{#if isGM}}
           <button type="button" class="fvtt-ct-btn primary" data-action="pokerStartRound" title="Crupiê: Recolhe tudo, embaralha e dá 2 cartas privadas para cada jogador">
-            <i class="fa-solid fa-hat-wizard"></i> Nova Mão (Dar 2 Cartas)
+            <i class="fa-solid fa-hat-wizard"></i> Nova Mão (2 Cartas)
           </button>
           <button type="button" class="fvtt-ct-btn primary" data-action="pokerStage" data-stage="auto" title="Crupiê queima 1 carta e abre a próxima etapa (Flop -> Turn -> River)">
             <i class="fa-solid fa-forward-step"></i> Crupiê: Próxima Etapa
           </button>
-          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="flop">
-            Flop (3)
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="flop">Flop</button>
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="turn">Turn</button>
+          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="river">River</button>
+          <button type="button" class="fvtt-ct-btn danger" data-action="pokerResetPot" title="Zera o Pote e as apostas da rodada">
+            <i class="fa-solid fa-broom"></i> Zerar Pote
           </button>
-          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="turn">
-            Turn (1)
-          </button>
-          <button type="button" class="fvtt-ct-btn" data-action="pokerStage" data-stage="river">
-            River (1)
+          <button type="button" class="fvtt-ct-btn" data-action="pokerBuyInAll" data-amount="1000" title="Define 1.000 fichas para todos os jogadores">
+            <i class="fa-solid fa-coins"></i> Buy-in (1.000)
           </button>
         {{/if}}
-        <button type="button" class="fvtt-ct-btn" data-action="pokerBet" data-amount="10">
-          +10 Pote
-        </button>
-        <button type="button" class="fvtt-ct-btn" data-action="pokerBet" data-amount="50">
-          +50 Pote
-        </button>
       {{/if}}
 
       {{#if isMtg}}
@@ -109,13 +103,47 @@
           <div class="fvtt-ct-card-mini">
             <img src="{{discard.topCard.img}}" alt="{{discard.topCard.name}}" />
             <span class="fvtt-ct-card-mini-label">
-              {{#if discard.topCard.isFaceDown}}Carta Queimada{{else}}{{discard.topCard.name}}{{/if}}
+              {{#if discard.topCard.isFaceDown}}Carta Oculta / Queimada{{else}}{{discard.topCard.name}}{{/if}}
             </span>
           </div>
         {{else}}
           <p class="fvtt-ct-empty">Vazio</p>
         {{/if}}
       </div>
+
+      {{#if isPoker}}
+        <!-- PLACAR DE FICHAS DOS JOGADORES E ENTREGA DO POTE -->
+        <div class="fvtt-ct-zone-box fvtt-ct-players-bank">
+          <h4><i class="fa-solid fa-users"></i> Banca dos Jogadores</h4>
+          <div class="fvtt-ct-player-list">
+            {{#each playerChipStacks as |p|}}
+              <div class="fvtt-ct-player-row {{#if p.folded}}is-folded{{/if}}">
+                <div class="fvtt-ct-player-info">
+                  <strong>{{p.name}}</strong>
+                  <span class="fvtt-ct-player-chips">🪙 {{p.chips}}</span>
+                  {{#if p.roundBet}}
+                    <span class="fvtt-ct-player-bet">(Na mesa: {{p.roundBet}})</span>
+                  {{/if}}
+                  {{#if p.folded}}
+                    <span class="fvtt-ct-folded-tag">FOLD</span>
+                  {{/if}}
+                </div>
+                {{#if ../isGM}}
+                  <button
+                    type="button"
+                    class="fvtt-ct-btn award-btn"
+                    data-action="pokerAwardPot"
+                    data-hand-id="{{p.handId}}"
+                    title="Entregar todo o Pote da mesa para {{p.name}}"
+                  >
+                    🏆 Dar Pote
+                  </button>
+                {{/if}}
+              </div>
+            {{/each}}
+          </div>
+        </div>
+      {{/if}}
     </aside>
 
     <!-- ÁREA CENTRAL: TABLEZONE / CRUPIÊ TEXAS HOLD'EM / BATTLEFIELD -->
@@ -123,7 +151,10 @@
       <div class="fvtt-ct-zone-header">
         <h3>
           {{#if isPoker}}
-            🎩 Crupiê Texas Hold'em — Pote Atual: <span class="fvtt-ct-badge-gold">{{battlefield.pot}} fichas</span>
+            🎩 Mesa Texas Hold'em — Pote Total: <span class="fvtt-ct-badge-gold">💰 {{battlefield.pot}} fichas</span>
+            {{#if battlefield.currentBet}}
+              <span class="fvtt-ct-current-bet-badge">Aposta Atual: {{battlefield.currentBet}} fichas</span>
+            {{/if}}
           {{else if isBuraco}}
             Jogos Baixados / Canastras — Pontos: <span class="fvtt-ct-badge-gold">{{battlefield.buracoScore.total}} pts</span>
           {{else}}
@@ -228,28 +259,67 @@
     </main>
   </div>
 
-  <!-- DOCK INFERIOR: MÃO PRIVADA DO JOGADOR LOGADO (HANDZONE) -->
+  <!-- DOCK INFERIOR: MÃO PRIVADA DO JOGADOR LOGADO + CONTROLES DE APOSTA DE FICHAS -->
   <footer class="fvtt-ct-hand-dock">
     <div class="fvtt-ct-hand-header">
-      <h4>
-        <i class="fa-solid fa-lock"></i>
-        {{#if hand}}
-          {{hand.name}} — Privada ({{hand.cards.length}} cartas)
-        {{else}}
-          Sem Mão Privada
-          <button type="button" class="fvtt-ct-btn primary" data-action="ensureMyHand">Criar Minha Mão Privada</button>
+      <div class="fvtt-ct-hand-title-group">
+        <h4>
+          <i class="fa-solid fa-lock"></i>
+          {{#if hand}}
+            {{hand.name}} ({{hand.cards.length}} cartas)
+          {{else}}
+            Sem Mão Privada
+            <button type="button" class="fvtt-ct-btn primary" data-action="ensureMyHand">Criar Minha Mão Privada</button>
+          {{/if}}
+        </h4>
+
+        {{#if isPoker}}
+          {{#if hand}}
+            <div class="fvtt-ct-chip-wallet">
+              <span class="fvtt-ct-wallet-balance">🪙 Minhas Fichas: <strong>{{hand.chips}}</strong></span>
+              <span class="fvtt-ct-wallet-round">Na rodada: <strong>{{hand.roundBet}}</strong></span>
+            </div>
+          {{/if}}
         {{/if}}
-      </h4>
+      </div>
+
       <div class="fvtt-ct-hand-controls">
-        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="suit">
-          <i class="fa-solid fa-arrow-down-a-z"></i> Ordenar por Naipe
+        {{#if isPoker}}
+          {{#if hand}}
+            <!-- BARRA DE APOSTAS DO JOGADOR (CHECK/CALL, FICHAS, CUSTOM, ALL-IN, FOLD) -->
+            <button type="button" class="fvtt-ct-btn primary" data-action="pokerCheckOrCall">
+              {{#if hand.canCheck}}
+                ✊ Check (Mesa)
+              {{else}}
+                📞 Call (Pagar {{hand.toCall}})
+              {{/if}}
+            </button>
+            <button type="button" class="fvtt-ct-chip-btn chip-10" data-action="pokerBet" data-amount="10">+10</button>
+            <button type="button" class="fvtt-ct-chip-btn chip-25" data-action="pokerBet" data-amount="25">+25</button>
+            <button type="button" class="fvtt-ct-chip-btn chip-50" data-action="pokerBet" data-amount="50">+50</button>
+            <button type="button" class="fvtt-ct-chip-btn chip-100" data-action="pokerBet" data-amount="100">+100</button>
+            <div class="fvtt-ct-custom-bet-wrap">
+              <input type="number" class="fvtt-ct-custom-bet-input" placeholder="Valor" min="1" step="5" value="20" />
+              <button type="button" class="fvtt-ct-btn" data-action="pokerCustomBet">Apostar</button>
+            </div>
+            <button type="button" class="fvtt-ct-btn allin-btn" data-action="pokerAllIn">
+              🔥 All-In
+            </button>
+            <button type="button" class="fvtt-ct-btn danger" data-action="pokerFold">
+              🏳️ Fold
+            </button>
+          {{/if}}
+        {{/if}}
+
+        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="suit" title="Ordenar por Naipe">
+          <i class="fa-solid fa-arrow-down-a-z"></i> Naipe
         </button>
-        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="value">
-          <i class="fa-solid fa-arrow-down-1-9"></i> Ordenar por Valor
+        <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="value" title="Ordenar por Valor">
+          <i class="fa-solid fa-arrow-down-1-9"></i> Valor
         </button>
         {{#if isMtg}}
           <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="cmc">
-            Ordenar por CMC
+            CMC
           </button>
         {{/if}}
       </div>

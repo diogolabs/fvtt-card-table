@@ -36,11 +36,14 @@ export const DEFAULT_STACK_STATE = {
   gameMode: "generic",        // "generic" | "poker" | "buraco" | "mtg"
   zoneType: "deck",           // "library" | "hand" | "battlefield" | "graveyard" | "exile" | "command" | "lixo" | "morto" | "meld" | "community" | "burn"
   ownerUserId: null,          // ID do usuário dono exclusivo desta Mão Privada
-  pot: 0,                     // Pote acumulado (Poker)
-  currentBet: 0,              // Aposta atual da rodada (Poker)
+  chips: 1000,                // Saldo de fichas do jogador dono desta mão (Poker)
+  roundBet: 0,                // Valor já apostado pelo jogador na rodada atual (Poker)
+  folded: false,              // Se o jogador desistiu (Fold) na mão atual (Poker)
+  pot: 0,                     // Pote acumulado na mesa (Poker)
+  currentBet: 0,              // Maior aposta atual da rodada na mesa (Poker)
   teamId: null,               // Dupla dona da zona de jogos baixados (Buraco)
   sourceCompendiumUuid: null, // UUID do Compêndio de origem para sincronização de versão
-  sourceVersion: "1.0.1"
+  sourceVersion: "1.0.3"
 };
 
 /**
