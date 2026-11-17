@@ -4,18 +4,198 @@ import { ScryDialogApp } from "../apps/tabletop-app.mjs";
 const SUIT_ORDER = { spades: 1, hearts: 2, clubs: 3, diamonds: 4, joker: 5 };
 
 /**
- * Motor principal de automação de cartas (Cockatrice, MTG, Poker e Buraco)
+ * Motor principal de automação de cartas para Foundry VTT v13 (Cockatrice, MTG, Poker e Buraco)
  */
 export class CardEngine {
+  /* ======================================================================== */
+  /*  GERADOR AUTOMÁTICO DE BARALHOS E ZONAS NO MUNDO (1-CLICK SETUP V13)     */
+  /* ======================================================================== */
+
+  /**
+   * Cria automaticamente o Baralho completo (52 cartas p/ Poker, 108 p/ Buraco ou Grimório MTG)
+   * mais a Mão do Jogador, a Mesa/Campo de Batalha e o Lixo/Cemitério no mundo atual.
+   * @param {"mtg"|"poker"|"buraco"} mode
+   */
+  static async bootstrapWorldZones(mode = "mtg") {
+    const defaultImg = "icons/sundries/gaming/playing-cards-grey.webp";
+    const suits = [
+      { key: "spades", symbol: "♠", label: "Espadas" },
+      { key: "hearts", symbol: "♥", label: "Copas" },
+      { key: "clubs", symbol: "♣", label: "Paus" },
+      { key: "diamonds", symbol: "♦", label: "Ouros" }
+    ];
+    const ranks = [
+      { value: 2, name: "2" },
+      { value: 3, name: "3" },
+      { value: 4, name: "4" },
+      { value: 5, name: "5" },
+      { value: 6, name: "6" },
+      { value: 7, name: "7" },
+      { value: 8, name: "8" },
+      { value: 9, name: "9" },
+      { value: 10, name: "10" },
+      { value: 11, name: "Valete (J)" },
+      { value: 12, name: "Dama (Q)" },
+      { value: 13, name: "Rei (K)" },
+      { value: 14, name: "Ás (A)" }
+    ];
+
+    const buildStandard52 = (copyIndex = 1) => {
+      const list = [];
+      for (const s of suits) {
+        for (const r of ranks) {
+          const isTwo = r.value === 2;
+          const ptVal = r.value === 14 ? 15 : r.value >= 8 || isTwo ? 10 : 5;
+          list.push({
+            name: `${r.name} de ${s.label} (${s.symbol})`,
+            type: "base",
+            suit: s.key,
+            value: r.value,
+            face: 0,
+            faces: [{ name: `${r.name} de ${s.label} (${s.symbol})`, img: defaultImg, text: `Baralho #${copyIndex}` }],
+            back: { name: "Verso", img: defaultImg },
+            flags: {
+              [MODULE_ID]: {
+                state: {
+                  isWildcard: mode === "buraco" && isTwo,
+                  metadata: { pointValue: ptVal }
+                }
+              }
+            }
+          });
+        }
+      }
+      return list;
+    };
+
+    let deckName = "Baralho Principal";
+    let cardsData = [];
+
+    if (mode === "poker") {
+      deckName = "Baralho de Poker (52 Cartas)";
+      cardsData = buildStandard52(1);
+    } else if (mode === "buraco") {
+      deckName = "Baralho Duplo de Buraco (108 Cartas)";
+      cardsData = [...buildStandard52(1), ...buildStandard52(2)];
+      for (let j = 1; j <= 4; j++) {
+        cardsData.push({
+          name: `Curingão #${j} (Joker)`,
+          type: "base",
+          suit: "joker",
+          value: 0,
+          face: 0,
+          faces: [{ name: `Curingão #${j}`, img: defaultImg, text: "Curinga (20 pts)" }],
+          back: { name: "Verso", img: defaultImg },
+          flags: {
+            [MODULE_ID]: {
+              state: { isWildcard: true, metadata: { pointValue: 20 } }
+            }
+          }
+        });
+      }
+    } else {
+      deckName = "Grimório MTG / Cockatrice";
+      const mtgSamples = [
+        { name: "Island (Ilha)", suit: "lands", cmc: 0, img: "icons/magic/water/wave-water-blue.webp", types: ["Basic Land", "Island"], count: 8 },
+        { name: "Mountain (Montanha)", suit: "lands", cmc: 0, img: "icons/magic/fire/flame-burning-earth-orange.webp", types: ["Basic Land", "Mountain"], count: 8 },
+        { name: "Lightning Bolt", suit: "spells", cmc: 1, img: "icons/magic/lightning/bolt-strike-blue.webp", types: ["Instant"], count: 4 },
+        { name: "Counterspell", suit: "spells", cmc: 2, img: "icons/magic/defensive/shield-barrier-glowing-blue.webp", types: ["Instant"], count: 4 },
+        { name: "Delver of Secrets // Insectile Aberration", suit: "creatures", cmc: 1, img: "icons/magic/control/silhouette-hold-change-blue.webp", types: ["Creature", "Human", "Wizard"], count: 4 },
+        { name: "Shivan Dragon (5/5 Flying)", suit: "creatures", cmc: 6, img: "icons/creatures/reptiles/dragon-horned-flame-red.webp", types: ["Creature", "Dragon"], count: 2 }
+      ];
+      for (const sample of mtgSamples) {
+        for (let i = 0; i < sample.count; i++) {
+          cardsData.push({
+            name: sample.name,
+            type: "base",
+            suit: sample.suit,
+            value: sample.cmc,
+            face: 0,
+            faces: [{ name: sample.name, img: sample.img, text: sample.types.join(" — ") }],
+            back: { name: "Deckmaster", img: defaultImg },
+            flags: {
+              [MODULE_ID]: {
+                state: {
+                  tapped: false,
+                  counters: { plusOne: 0, loyalty: 0, charge: 0, custom: [] },
+                  metadata: { cmc: sample.cmc, cardTypes: sample.types }
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    const deck = await Cards.create({
+      name: deckName,
+      type: "deck",
+      img: defaultImg,
+      cards: cardsData,
+      flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "library" } } }
+    });
+
+    await deck.shuffle({ chatNotification: false });
+
+    if (!game.cards.some((c) => c.type === "hand" && c.testUserPermission(game.user, "OWNER"))) {
+      await Cards.create({
+        name: `Mão de ${game.user.name}`,
+        type: "hand",
+        img: defaultImg,
+        flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "hand" } } }
+      });
+    }
+
+    if (!game.cards.some((c) => c.type === "pile" && ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(c).zoneType))) {
+      await Cards.create({
+        name: mode === "poker" ? "Mesa Comunitária (Flop/Turn/River)" : mode === "buraco" ? "Jogos Baixados / Canastras" : "Campo de Batalha (TableZone)",
+        type: "pile",
+        img: defaultImg,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              gameMode: mode,
+              zoneType: mode === "poker" ? "community" : mode === "buraco" ? "meld" : "battlefield",
+              pot: 0
+            }
+          }
+        }
+      });
+    }
+
+    if (!game.cards.some((c) => c.type === "pile" && ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType))) {
+      await Cards.create({
+        name: mode === "poker" ? "Queima / Descarte (Burn)" : mode === "buraco" ? "Lixo" : "Cemitério (Graveyard)",
+        type: "pile",
+        img: defaultImg,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              gameMode: mode,
+              zoneType: mode === "poker" ? "burn" : mode === "buraco" ? "lixo" : "graveyard"
+            }
+          }
+        }
+      });
+    }
+
+    if (mode === "buraco" && !game.cards.some((c) => c.type === "pile" && CardStateManager.getStackState(c).zoneType === "morto")) {
+      await Cards.create({
+        name: "Morto (11 Cartas)",
+        type: "pile",
+        img: defaultImg,
+        flags: { [MODULE_ID]: { stackState: { gameMode: "buraco", zoneType: "morto" } } }
+      });
+    }
+
+    ui.notifications.info(`Baralho "${deckName}" (${cardsData.length} cartas) e zonas de jogo criados com sucesso!`);
+    return deck;
+  }
+
   /* ======================================================================== */
   /*  UTILITÁRIOS GERAIS & ORDENAÇÃO (COCKATRICE UX)                          */
   /* ======================================================================== */
 
-  /**
-   * Ordena uma mão ou pilha por Naipe + Valor, apenas Valor, ou Custo de Mana (CMC)
-   * @param {Cards} stack - Documento Cards (Mão ou Pilha)
-   * @param {"suit"|"value"|"cmc"|"name"} by - Critério de ordenação
-   */
   static async sortStack(stack, by = "suit") {
     const cards = [...stack.cards.contents];
     cards.sort((a, b) => {
@@ -48,15 +228,11 @@ export class CardEngine {
     return stack;
   }
 
-  /**
-   * Sincroniza baralhos já importados no Mundo com as versões mais recentes do Compêndio
-   * (Garante atualizações consistentes via GitHub sem quebrar partidas em andamento)
-   */
   static async syncWorldDecksWithCompendium({ notify = true } = {}) {
     const pack = game.packs.get(`${MODULE_ID}.decks`);
     if (!pack) return 0;
 
-    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.0";
+    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "13.0.0";
     const packDocs = await pack.getDocuments();
     let updatedCount = 0;
 
@@ -71,7 +247,6 @@ export class CardEngine {
       const currentVersion = CardStateManager.getStackState(worldDeck).sourceVersion;
       if (currentVersion === moduleVersion) continue;
 
-      // Atualiza metadados, imagens e descrições das cartas existentes mantendo estado drawn/sort
       const updates = [];
       for (const srcCard of packDeck.cards) {
         const targetCard = worldDeck.cards.find((c) => c.name === srcCard.name && c.suit === srcCard.suit);
@@ -113,16 +288,11 @@ export class CardEngine {
   /* ======================================================================== */
 
   static mtg = {
-    /**
-     * Vira (Tap 90°) ou desvira (Untap 0°) uma carta na mesa (Atalho estilo Cockatrice: Duplo Clique)
-     * @param {Card} card
-     */
     async toggleTap(card) {
       const state = CardStateManager.getCardState(card);
       const nextTapped = !state.tapped;
       await CardStateManager.updateCardState(card, { tapped: nextTapped });
 
-      // Se houver Tile correspondente no Canvas (modo Standalone ou CCM), rotaciona 90 graus
       if (canvas?.ready) {
         const linkedTiles = canvas.scene.tiles.filter(
           (t) => t.getFlag(MODULE_ID, "cardUuid") === card.uuid
@@ -134,10 +304,6 @@ export class CardEngine {
       return nextTapped;
     },
 
-    /**
-     * Desvira todas as cartas de uma zona de campo de batalha (Ctrl+U no Cockatrice)
-     * @param {Cards} battlefieldPile
-     */
     async untapAll(battlefieldPile) {
       const updates = battlefieldPile.cards.map((c) => ({
         _id: c.id,
@@ -158,12 +324,6 @@ export class CardEngine {
       ui.notifications.info(game.i18n.localize("FVTT_CARD_TABLE.Notifications.UntappedAll"));
     },
 
-    /**
-     * Modifica um contador na carta (+1/+1, lealdade, carga)
-     * @param {Card} card
-     * @param {"plusOne"|"loyalty"|"charge"} counterType
-     * @param {number} delta
-     */
     async modifyCounter(card, counterType = "plusOne", delta = 1) {
       const state = CardStateManager.getCardState(card);
       const current = state.counters?.[counterType] ?? 0;
@@ -177,23 +337,12 @@ export class CardEngine {
       return nextVal;
     },
 
-    /**
-     * Anexa uma carta a outra (ex: Aura, Equipamento)
-     * @param {Card} attachmentCard
-     * @param {Card|null} targetCard
-     */
     async attachCard(attachmentCard, targetCard = null) {
       return CardStateManager.updateCardState(attachmentCard, {
         attachedTo: targetCard ? targetCard.id : null
       });
     },
 
-    /**
-     * Abre a janela de Scry / Peek nas X cartas do topo do baralho
-     * Permite colocar cartas no topo (em qualquer ordem) ou no fundo do grimório
-     * @param {Cards} deck
-     * @param {number} count
-     */
     async scry(deck, count = 2) {
       const available = [...deck.availableCards].sort((a, b) => a.sort - b.sort);
       const topCards = available.slice(0, count);
@@ -202,16 +351,10 @@ export class CardEngine {
         return;
       }
       const dialog = new ScryDialogApp({ deck, cards: topCards });
-      dialog.render(true);
+      dialog.render({ force: true });
       return dialog;
     },
 
-    /**
-     * Aplica a resolução do Scry (cartas que ficam no topo vs cartas enviadas ao fundo)
-     * @param {Cards} deck
-     * @param {string[]} topCardIds - IDs na ordem do topo
-     * @param {string[]} bottomCardIds - IDs enviados para o fundo
-     */
     async resolveScry(deck, topCardIds = [], bottomCardIds = []) {
       const allCards = [...deck.availableCards].sort((a, b) => a.sort - b.sort);
       const minSort = allCards.length ? allCards[0].sort : 0;
@@ -240,12 +383,6 @@ export class CardEngine {
       });
     },
 
-    /**
-     * Executa um London Mulligan: devolve a mão para o baralho, embaralha e compra N cartas
-     * @param {Cards} hand
-     * @param {Cards} deck
-     * @param {number} drawCount
-     */
     async mulligan(hand, deck, drawCount = 7) {
       await hand.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: false });
@@ -255,11 +392,6 @@ export class CardEngine {
       );
     },
 
-    /**
-     * Cria uma ficha (Token de criatura/tesouro) diretamente no Campo de Batalha
-     * @param {Cards} battlefieldPile
-     * @param {object} tokenConfig
-     */
     async createToken(
       battlefieldPile,
       { name = "Treasure Token", img = "icons/commodities/currency/coins-assorted-mix-copper-silver-gold.webp", power = "", toughness = "", types = ["Token", "Artifact", "Treasure"] } = {}
@@ -291,12 +423,6 @@ export class CardEngine {
   /* ======================================================================== */
 
   static poker = {
-    /**
-     * Prepara uma nova rodada de Poker: recolhe todas as cartas, embaralha e distribui as Hole Cards
-     * @param {Cards} deck - Baralho de 52 cartas
-     * @param {Cards[]} playerHands - Mãos dos jogadores na mesa
-     * @param {number} holeCardCount - 2 para Texas Hold'em, 4 para Omaha
-     */
     async startRound(deck, playerHands = [], holeCardCount = 2) {
       await deck.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: true });
@@ -308,15 +434,7 @@ export class CardEngine {
       }
     },
 
-    /**
-     * Queima 1 carta (Burn) e abre as cartas comunitárias (Flop = 3, Turn = 1, River = 1)
-     * @param {Cards} deck
-     * @param {Cards} burnPile
-     * @param {Cards} communityPile
-     * @param {"flop"|"turn"|"river"} stage
-     */
     async dealCommunity(deck, burnPile, communityPile, stage = "flop") {
-      // 1. Queima 1 carta virada para baixo (face: null)
       if (burnPile && deck.availableCards.length > 0) {
         await burnPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -325,7 +443,6 @@ export class CardEngine {
         });
       }
 
-      // 2. Abre as cartas comunitárias viradas para cima (face: 0)
       const count = stage === "flop" ? 3 : 1;
       const drawn = await communityPile.draw(deck, count, {
         how: CONST.CARD_DRAW_MODES.TOP,
@@ -339,12 +456,6 @@ export class CardEngine {
       return drawn;
     },
 
-    /**
-     * Registra uma aposta no Pote da mesa
-     * @param {Cards} communityPile
-     * @param {number} amount
-     * @param {string} playerName
-     */
     async bet(communityPile, amount, playerName = game.user.name) {
       const state = CardStateManager.getStackState(communityPile);
       const nextPot = (state.pot ?? 0) + Number(amount);
@@ -364,19 +475,10 @@ export class CardEngine {
   /* ======================================================================== */
 
   static buraco = {
-    /**
-     * Prepara a mesa completa de Buraco:
-     * - Recolhe e embaralha o baralho duplo (104 ou 108 cartas)
-     * - Separa os 2 Mortos com 11 cartas cada (virados para baixo)
-     * - Distribui 11 cartas para cada jogador e ordena por naipe
-     * - Vira a 1ª carta do Lixo
-     * @param {object} config
-     */
     async setupTable({ deck, playerHands = [], morto1, morto2, lixoPile }) {
       await deck.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: false });
 
-      // Cria os dois Mortos de 11 cartas
       if (morto1) {
         await morto1.draw(deck, 11, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -392,7 +494,6 @@ export class CardEngine {
         });
       }
 
-      // Distribui 11 cartas para cada jogador e ordena por Naipe + Valor
       if (playerHands.length > 0) {
         await deck.deal(playerHands, 11, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -403,7 +504,6 @@ export class CardEngine {
         }
       }
 
-      // Vira a primeira carta do Lixo aberta
       if (lixoPile) {
         await lixoPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -413,15 +513,10 @@ export class CardEngine {
       }
 
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>Mesa de Buraco Pronta!</strong> 11 cartas distribuídas para ${playerHands.length} jogador(es), 2 Mortos separados e Lixo aberto.</div>`
+        content: `<div class="fvtt-card-table-chat"><strong>Mesa de Buraco Pronta!</strong> 11 cartas distribuídas para ${playerHands.length} jogador(es), Morto separado e Lixo aberto.</div>`
       });
     },
 
-    /**
-     * Compra o Lixo inteiro para a mão do jogador e reordena a mão por naipe
-     * @param {Cards} hand
-     * @param {Cards} lixoPile
-     */
     async buyTrash(hand, lixoPile) {
       const cardIds = lixoPile.cards.map((c) => c.id);
       if (cardIds.length === 0) {
@@ -433,19 +528,11 @@ export class CardEngine {
       return passed;
     },
 
-    /**
-     * Baixa um jogo (sequência/trinca) ou adiciona cartas a uma canastra existente na zona da dupla
-     * Calcula automaticamente se virou Canastra Limpa (7+ cartas sem curinga) ou Suja (com curinga)
-     * @param {Cards} hand
-     * @param {Cards} teamMeldPile
-     * @param {string[]} cardIds
-     * @param {string|null} meldGroupId
-     */
     async playMeld(hand, teamMeldPile, cardIds = [], meldGroupId = null) {
       if (cardIds.length === 0) return null;
       const groupId = meldGroupId ?? foundry.utils.randomID(8);
 
-      const movedCards = await hand.pass(teamMeldPile, cardIds, {
+      await hand.pass(teamMeldPile, cardIds, {
         updateData: {
           face: 0,
           [`flags.${MODULE_ID}.state.meldGroupId`]: groupId
@@ -453,7 +540,6 @@ export class CardEngine {
         chatNotification: false
       });
 
-      // Reordena as cartas do mesmo grupo por valor
       const groupCards = teamMeldPile.cards.filter(
         (c) => CardStateManager.getCardState(c).meldGroupId === groupId
       );
@@ -470,7 +556,6 @@ export class CardEngine {
       const updates = groupCards.map((c, idx) => ({
         _id: c.id,
         sort: (idx + 1) * 100,
-        // Atravessa a última carta a 90° se fechar canastra (tradição do Buraco)
         [`flags.${MODULE_ID}.state.tapped`]: isCanastra && idx === groupCards.length - 1
       }));
       if (updates.length) {
@@ -487,10 +572,6 @@ export class CardEngine {
       return { groupId, count: groupCards.length, isCanastra, isClean: isCanastra && !hasWildcard };
     },
 
-    /**
-     * Contabiliza os pontos totais de uma zona de jogos baixados da dupla
-     * @param {Cards} teamMeldPile
-     */
     calculateTeamScore(teamMeldPile) {
       let cardPoints = 0;
       const groups = new Map();

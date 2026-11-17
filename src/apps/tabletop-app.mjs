@@ -4,8 +4,7 @@ import { CardEngine } from "../api/card-engine.mjs";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
- * Interface Principal de Mesa Virtual e Hand Dock (Inspirada no Cockatrice)
- * Construída em ApplicationV2 nativa do Foundry VTT v14
+ * Interface Principal de Mesa Virtual e Hand Dock para Foundry VTT v13
  */
 export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
@@ -20,7 +19,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     tag: "section",
     window: {
       title: "FVTT_CARD_TABLE.App.Title",
-      icon: "fa-solid fa-Playing-cards",
+      icon: "fa-solid fa-diamond",
       resizable: true,
       minimizable: true
     },
@@ -30,6 +29,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     },
     actions: {
       setGameMode: TabletopBoardApp.#onSetGameMode,
+      bootstrapZones: TabletopBoardApp.#onBootstrapZones,
       drawCard: TabletopBoardApp.#onDrawCard,
       shuffleDeck: TabletopBoardApp.#onShuffleDeck,
       recallDeck: TabletopBoardApp.#onRecallDeck,
@@ -58,15 +58,15 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     }
   };
 
-  /**
-   * Localiza ou sugere as pilhas ativas para cada zona da mesa
-   */
   _resolveZones() {
     const decks = game.cards.filter((c) => c.type === "deck");
     const hands = game.cards.filter((c) => c.type === "hand" && c.testUserPermission(game.user, "OWNER"));
     const piles = game.cards.filter((c) => c.type === "pile");
 
-    const mainDeck = decks[0] ?? null;
+    const mainDeck =
+      decks.find((d) => CardStateManager.getStackState(d).gameMode === this.activeGameMode) ??
+      decks[0] ??
+      null;
     const playerHand = hands[0] ?? null;
     const battlefieldPile =
       piles.find((p) => ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(p).zoneType)) ??
@@ -163,12 +163,13 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     return context;
   }
 
-  /* ======================================================================== */
-  /*  ACTIONS DECLARATIVOS (APPLICATION V2)                                   */
-  /* ======================================================================== */
-
   static async #onSetGameMode(event, target) {
     this.activeGameMode = target.dataset.mode || "mtg";
+    await this.render();
+  }
+
+  static async #onBootstrapZones() {
+    await CardEngine.bootstrapWorldZones(this.activeGameMode);
     await this.render();
   }
 
@@ -218,7 +219,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     const ids = cardId ? [cardId] : [...this.selectedCardIds];
     if (ids.length === 0) return;
 
-    const faceDown = event.shiftKey; // Shift + clique joga virada para baixo (estilo Cockatrice)
+    const faceDown = event.shiftKey;
     await playerHand.pass(battlefieldPile, ids, {
       updateData: { face: faceDown ? null : 0 },
       chatNotification: true
@@ -353,9 +354,6 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   }
 }
 
-/**
- * Dialogo ApplicationV2 para Scry / Peek (Olhar e ordenar topo/fundo do baralho)
- */
 export class ScryDialogApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor({ deck, cards = [] }, options = {}) {
     super(options);

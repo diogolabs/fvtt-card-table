@@ -6,10 +6,13 @@
         <i class="fa-solid fa-wand-magic-sparkles"></i> MTG / Cockatrice
       </button>
       <button type="button" class="fvtt-ct-btn {{#if isPoker}}active{{/if}}" data-action="setGameMode" data-mode="poker">
-        <i class="fa-solid fa-Coins"></i> Poker
+        <i class="fa-solid fa-coins"></i> Poker
       </button>
       <button type="button" class="fvtt-ct-btn {{#if isBuraco}}active{{/if}}" data-action="setGameMode" data-mode="buraco">
         <i class="fa-solid fa-layer-group"></i> Buraco / Canastra
+      </button>
+      <button type="button" class="fvtt-ct-btn primary" data-action="bootstrapZones" title="Cria Baralho, Mão, Mesa e Lixo automaticamente no mundo">
+        <i class="fa-solid fa-magic"></i> Gerar Baralho & Zonas ({{gameMode}})
       </button>
     </div>
 
@@ -76,7 +79,7 @@
             <button type="button" class="fvtt-ct-btn" data-action="recallDeck">Resetar</button>
           </div>
         {{else}}
-          <p class="fvtt-ct-empty">Importe um Baralho do Compêndio para começar.</p>
+          <p class="fvtt-ct-empty">Clique em "Gerar Baralho & Zonas" no topo para criar tudo automaticamente.</p>
         {{/if}}
       </div>
 

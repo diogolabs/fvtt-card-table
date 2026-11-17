@@ -4,13 +4,18 @@ import { TabletopBoardApp, ScryDialogApp } from "./apps/tabletop-app.mjs";
 
 let tabletopBoardInstance = null;
 
+function openCardTableBoard() {
+  if (!tabletopBoardInstance) tabletopBoardInstance = new TabletopBoardApp();
+  tabletopBoardInstance.render({ force: true });
+  return tabletopBoardInstance;
+}
+
 /* ========================================================================== */
-/*  HOOK: INIT (Configurações, API Pública e Keybindings estilo Cockatrice)   */
+/*  HOOK: INIT (Configurações, API Pública e Keybindings para Foundry v13)    */
 /* ========================================================================== */
 Hooks.once("init", () => {
-  console.log(`${MODULE_ID} | Inicializando módulo de cartas (Poker, Buraco, MTG & Cockatrice)`);
+  console.log(`${MODULE_ID} | Inicializando módulo de cartas para Foundry VTT v13`);
 
-  // Configurações do Módulo
   game.settings.register(MODULE_ID, "defaultGameMode", {
     name: "FVTT_CARD_TABLE.Settings.DefaultGameMode.Name",
     hint: "FVTT_CARD_TABLE.Settings.DefaultGameMode.Hint",
@@ -34,18 +39,15 @@ Hooks.once("init", () => {
     default: true
   });
 
-  // Atalhos de teclado inspirados no Cockatrice (Ctrl+D = Comprar, Ctrl+U = Desvirar Tudo, Ctrl+M = Mulligan)
   game.keybindings.register(MODULE_ID, "openTabletopBoard", {
     name: "FVTT_CARD_TABLE.Keybindings.OpenBoard",
     editable: [{ key: "KeyK", modifiers: ["Control"] }],
     onDown: () => {
-      if (!tabletopBoardInstance) tabletopBoardInstance = new TabletopBoardApp();
-      tabletopBoardInstance.render(true);
+      openCardTableBoard();
       return true;
     }
   });
 
-  // Exposição da API pública no módulo para Macros, Scripts e Integrações
   const module = game.modules.get(MODULE_ID);
   if (module) {
     module.api = {
@@ -53,11 +55,7 @@ Hooks.once("init", () => {
       CardStateManager,
       TabletopBoardApp,
       ScryDialogApp,
-      openBoard: () => {
-        if (!tabletopBoardInstance) tabletopBoardInstance = new TabletopBoardApp();
-        tabletopBoardInstance.render(true);
-        return tabletopBoardInstance;
-      }
+      openBoard: openCardTableBoard
     };
   }
 });
@@ -70,9 +68,8 @@ Hooks.once("ready", async () => {
     await CardEngine.syncWorldDecksWithCompendium({ notify: true });
   }
 
-  // Integração opcional com Complete Card Management (CCM) se estiver instalado e ativo
   if (game.modules.get("complete-card-management")?.active) {
-    console.log(`${MODULE_ID} | Complete Card Management detectado! Ativando ponte de compatibilidade.`);
+    console.log(`${MODULE_ID} | Complete Card Management detectado no Foundry v13!`);
     Hooks.on("ccm.dropCard", async (card, dropData) => {
       if (dropData?.shiftKey) {
         await card.update({ face: null });
@@ -82,39 +79,61 @@ Hooks.once("ready", async () => {
 });
 
 /* ========================================================================== */
-/*  HOOK: BOTÃO NA BARRA LATERAL DE CARTAS E SCENE CONTROLS                   */
+/*  HOOK: SCENE CONTROLS (Formato Objeto Nativo do Foundry VTT v13)           */
 /* ========================================================================== */
 Hooks.on("getSceneControlButtons", (controls) => {
   const tokenControls = Array.isArray(controls)
-    ? controls.find((c) => c.name === "token")
-    : controls.tokens;
+    ? controls.find((c) => c.name === "token" || c.name === "tokens")
+    : controls.tokens ?? controls.token;
+
+  if (!tokenControls) return;
 
   const toolConfig = {
     name: "cardTableBoard",
     title: "FVTT_CARD_TABLE.App.Title",
     icon: "fa-solid fa-diamond",
+    order: 99,
     button: true,
-    onClick: () => {
-      if (!tabletopBoardInstance) tabletopBoardInstance = new TabletopBoardApp();
-      tabletopBoardInstance.render(true);
-    }
+    visible: true,
+    onChange: () => openCardTableBoard(),
+    onClick: () => openCardTableBoard()
   };
 
-  if (Array.isArray(tokenControls?.tools)) {
+  if (Array.isArray(tokenControls.tools)) {
     tokenControls.tools.push(toolConfig);
-  } else if (tokenControls?.tools) {
+  } else if (tokenControls.tools && typeof tokenControls.tools === "object") {
     tokenControls.tools.cardTableBoard = toolConfig;
   }
 });
 
 /* ========================================================================== */
-/*  HOOK: DROP DE CARTA DIRETO NO CANVAS (Modo Standalone Tile Card)          */
+/*  HOOK: BOTÃO DIRETO NA ABA DE CARTAS (CARDS DIRECTORY V13)                 */
+/* ========================================================================== */
+Hooks.on("renderCardsDirectory", (app, html) => {
+  const root = html instanceof HTMLElement ? html : html[0];
+  if (!root || root.querySelector(".fvtt-ct-directory-btn")) return;
+
+  const headerActions = root.querySelector(".header-actions");
+  if (!headerActions) return;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "fvtt-ct-directory-btn";
+  btn.innerHTML = `<i class="fa-solid fa-diamond"></i> Mesa de Cartas`;
+  btn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    openCardTableBoard();
+  });
+  headerActions.appendChild(btn);
+});
+
+/* ========================================================================== */
+/*  HOOK: DROP DE CARTA DIRETO NO CANVAS (Modo Standalone Tile Card v13)      */
 /* ========================================================================== */
 Hooks.on("dropCanvasData", async (canvas, data) => {
-  // Se o Complete Card Management estiver ativo, deixamos o Card Layer dele cuidar do drop nativo
   if (game.modules.get("complete-card-management")?.active) return true;
-
   if (data.type !== "Card" || !data.uuid) return true;
+
   const card = await fromUuid(data.uuid);
   if (!card) return true;
 
@@ -143,7 +162,7 @@ Hooks.on("dropCanvasData", async (canvas, data) => {
 /* ========================================================================== */
 /*  HOOK: ATUALIZAÇÃO REATIVA DA MESA VIRTUAL QUANDO CARTAS MUDAM             */
 /* ========================================================================== */
-for (const hookName of ["createCard", "updateCard", "deleteCard", "updateCards"]) {
+for (const hookName of ["createCard", "updateCard", "deleteCard", "updateCards", "createCards", "deleteCards"]) {
   Hooks.on(hookName, () => {
     if (tabletopBoardInstance?.rendered) {
       tabletopBoardInstance.render();
