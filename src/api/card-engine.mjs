@@ -8,14 +8,268 @@ const SUIT_ORDER = { spades: 1, hearts: 2, clubs: 3, diamonds: 4, joker: 5 };
  */
 export class CardEngine {
   /* ======================================================================== */
-  /*  UTILITÁRIOS GERAIS & ORDENAÇÃO (COCKATRICE UX)                          */
+  /*  GERADOR AUTOMÁTICO DE BARALHOS, MÃOS PRIVADAS E ZONAS DA MESA           */
   /* ======================================================================== */
 
   /**
-   * Ordena uma mão ou pilha por Naipe + Valor, apenas Valor, ou Custo de Mana (CMC)
-   * @param {Cards} stack - Documento Cards (Mão ou Pilha)
-   * @param {"suit"|"value"|"cmc"|"name"} by - Critério de ordenação
+   * Busca ou cria uma Mão Privada exclusiva para um jogador específico,
+   * garantindo que outros jogadores tenham permissão NONE (não vejam as cartas dele)
+   * e que até o GM tenha sua própria mão separada da dos jogadores.
+   * @param {User} user
    */
+  static async ensureUserPrivateHand(user = game.user) {
+    let hand = game.cards.find(
+      (c) =>
+        c.type === "hand" &&
+        CardStateManager.getStackState(c).ownerUserId === user.id
+    );
+
+    if (!hand) {
+      // Verifica se já existe uma mão com o nome exato ou onde apenas esse jogador (não-GM) é OWNER
+      hand = game.cards.find(
+        (c) =>
+          c.type === "hand" &&
+          (c.name === `Mão de ${user.name}` ||
+            (!user.isGM && c.ownership?.[user.id] === CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER && c.ownership?.default === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE))
+      );
+    }
+
+    const privateOwnership = {
+      default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE,
+      [user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+    };
+
+    if (!hand) {
+      hand = await Cards.create({
+        name: `Mão de ${user.name}`,
+        type: "hand",
+        img: "icons/sundries/gaming/playing-cards-grey.webp",
+        ownership: privateOwnership,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              zoneType: "hand",
+              ownerUserId: user.id
+            }
+          }
+        }
+      });
+    } else if (game.user.isGM) {
+      await hand.update({
+        ownership: privateOwnership,
+        [`flags.${MODULE_ID}.stackState.ownerUserId`]: user.id
+      });
+    }
+
+    return hand;
+  }
+
+  /**
+   * Garante que todas as zonas da mesa (Baralho, Mãos Privadas de cada jogador ativo,
+   * Mesa Comunitária/Campo de Batalha e Descarte/Queima/Lixo) existam e tenham permissão correta.
+   * @param {"mtg"|"poker"|"buraco"} mode
+   */
+  static async bootstrapWorldZones(mode = "poker") {
+    const defaultImg = "icons/sundries/gaming/playing-cards-grey.webp";
+    const sharedOwnership = {
+      default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+    };
+
+    const suits = [
+      { key: "spades", symbol: "♠", label: "Espadas" },
+      { key: "hearts", symbol: "♥", label: "Copas" },
+      { key: "clubs", symbol: "♣", label: "Paus" },
+      { key: "diamonds", symbol: "♦", label: "Ouros" }
+    ];
+    const ranks = [
+      { value: 2, name: "2" },
+      { value: 3, name: "3" },
+      { value: 4, name: "4" },
+      { value: 5, name: "5" },
+      { value: 6, name: "6" },
+      { value: 7, name: "7" },
+      { value: 8, name: "8" },
+      { value: 9, name: "9" },
+      { value: 10, name: "10" },
+      { value: 11, name: "Valete (J)" },
+      { value: 12, name: "Dama (Q)" },
+      { value: 13, name: "Rei (K)" },
+      { value: 14, name: "Ás (A)" }
+    ];
+
+    const buildStandard52 = (copyIndex = 1) => {
+      const list = [];
+      for (const s of suits) {
+        for (const r of ranks) {
+          const isTwo = r.value === 2;
+          const ptVal = r.value === 14 ? 15 : r.value >= 8 || isTwo ? 10 : 5;
+          list.push({
+            name: `${r.name} de ${s.label} (${s.symbol})`,
+            type: "base",
+            suit: s.key,
+            value: r.value,
+            face: 0,
+            faces: [{ name: `${r.name} de ${s.label} (${s.symbol})`, img: defaultImg, text: `Baralho #${copyIndex}` }],
+            back: { name: "Verso", img: defaultImg },
+            flags: {
+              [MODULE_ID]: {
+                state: {
+                  isWildcard: mode === "buraco" && isTwo,
+                  metadata: { pointValue: ptVal }
+                }
+              }
+            }
+          });
+        }
+      }
+      return list;
+    };
+
+    let deck = game.cards.find(
+      (c) => c.type === "deck" && CardStateManager.getStackState(c).gameMode === mode
+    );
+
+    if (!deck) {
+      let deckName = "Baralho Principal";
+      let cardsData = [];
+
+      if (mode === "poker") {
+        deckName = "Baralho de Poker (52 Cartas)";
+        cardsData = buildStandard52(1);
+      } else if (mode === "buraco") {
+        deckName = "Baralho Duplo de Buraco (108 Cartas)";
+        cardsData = [...buildStandard52(1), ...buildStandard52(2)];
+        for (let j = 1; j <= 4; j++) {
+          cardsData.push({
+            name: `Curingão #${j} (Joker)`,
+            type: "base",
+            suit: "joker",
+            value: 0,
+            face: 0,
+            faces: [{ name: `Curingão #${j}`, img: defaultImg, text: "Curinga (20 pts)" }],
+            back: { name: "Verso", img: defaultImg },
+            flags: {
+              [MODULE_ID]: {
+                state: { isWildcard: true, metadata: { pointValue: 20 } }
+              }
+            }
+          });
+        }
+      } else {
+        deckName = "Grimório MTG / Cockatrice";
+        const mtgSamples = [
+          { name: "Island (Ilha)", suit: "lands", cmc: 0, img: "icons/magic/water/wave-water-blue.webp", types: ["Basic Land", "Island"], count: 8 },
+          { name: "Mountain (Montanha)", suit: "lands", cmc: 0, img: "icons/magic/fire/flame-burning-earth-orange.webp", types: ["Basic Land", "Mountain"], count: 8 },
+          { name: "Lightning Bolt", suit: "spells", cmc: 1, img: "icons/magic/lightning/bolt-strike-blue.webp", types: ["Instant"], count: 4 },
+          { name: "Counterspell", suit: "spells", cmc: 2, img: "icons/magic/defensive/shield-barrier-glowing-blue.webp", types: ["Instant"], count: 4 },
+          { name: "Delver of Secrets // Insectile Aberration", suit: "creatures", cmc: 1, img: "icons/magic/control/silhouette-hold-change-blue.webp", types: ["Creature", "Human", "Wizard"], count: 4 },
+          { name: "Shivan Dragon (5/5 Flying)", suit: "creatures", cmc: 6, img: "icons/creatures/reptiles/dragon-horned-flame-red.webp", types: ["Creature", "Dragon"], count: 2 }
+        ];
+        for (const sample of mtgSamples) {
+          for (let i = 0; i < sample.count; i++) {
+            cardsData.push({
+              name: sample.name,
+              type: "base",
+              suit: sample.suit,
+              value: sample.cmc,
+              face: 0,
+              faces: [{ name: sample.name, img: sample.img, text: sample.types.join(" — ") }],
+              back: { name: "Deckmaster", img: defaultImg },
+              flags: {
+                [MODULE_ID]: {
+                  state: {
+                    tapped: false,
+                    counters: { plusOne: 0, loyalty: 0, charge: 0, custom: [] },
+                    metadata: { cmc: sample.cmc, cardTypes: sample.types }
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+
+      deck = await Cards.create({
+        name: deckName,
+        type: "deck",
+        img: defaultImg,
+        ownership: sharedOwnership,
+        cards: cardsData,
+        flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "library" } } }
+      });
+      await deck.shuffle({ chatNotification: false });
+    }
+
+    // Cria uma Mão Privada para cada usuário ativo (ou todos os usuários cadastrados se for GM)
+    const targetUsers = game.user.isGM ? game.users.contents : [game.user];
+    for (const u of targetUsers) {
+      await this.ensureUserPrivateHand(u);
+    }
+
+    // Garante a Pilha de Mesa Comunitária / Campo de Batalha
+    let battlefieldPile = game.cards.find(
+      (c) => c.type === "pile" && ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(c).zoneType)
+    );
+    if (!battlefieldPile) {
+      battlefieldPile = await Cards.create({
+        name: mode === "poker" ? "Mesa Comunitária (Crupiê)" : mode === "buraco" ? "Jogos Baixados / Canastras" : "Campo de Batalha (TableZone)",
+        type: "pile",
+        img: defaultImg,
+        ownership: sharedOwnership,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              gameMode: mode,
+              zoneType: mode === "poker" ? "community" : mode === "buraco" ? "meld" : "battlefield",
+              pot: 0
+            }
+          }
+        }
+      });
+    }
+
+    // Garante a Pilha de Descarte / Queima / Lixo (separada da Mesa!)
+    let discardPile = game.cards.find(
+      (c) =>
+        c.type === "pile" &&
+        c.id !== battlefieldPile.id &&
+        ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType)
+    );
+    if (!discardPile) {
+      discardPile = await Cards.create({
+        name: mode === "poker" ? "Queima / Descarte (Muck)" : mode === "buraco" ? "Lixo" : "Cemitério (Graveyard)",
+        type: "pile",
+        img: defaultImg,
+        ownership: sharedOwnership,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              gameMode: mode,
+              zoneType: mode === "poker" ? "burn" : mode === "buraco" ? "lixo" : "graveyard"
+            }
+          }
+        }
+      });
+    }
+
+    if (mode === "buraco" && !game.cards.some((c) => c.type === "pile" && CardStateManager.getStackState(c).zoneType === "morto")) {
+      await Cards.create({
+        name: "Morto (11 Cartas)",
+        type: "pile",
+        img: defaultImg,
+        ownership: sharedOwnership,
+        flags: { [MODULE_ID]: { stackState: { gameMode: "buraco", zoneType: "morto" } } }
+      });
+    }
+
+    ui.notifications.info(`Mesa de ${mode.toUpperCase()} pronta! Mãos privadas configuradas por jogador.`);
+    return { deck, battlefieldPile, discardPile };
+  }
+
+  /* ======================================================================== */
+  /*  UTILITÁRIOS GERAIS & ORDENAÇÃO (COCKATRICE UX)                          */
+  /* ======================================================================== */
+
   static async sortStack(stack, by = "suit") {
     const cards = [...stack.cards.contents];
     cards.sort((a, b) => {
@@ -48,15 +302,11 @@ export class CardEngine {
     return stack;
   }
 
-  /**
-   * Sincroniza baralhos já importados no Mundo com as versões mais recentes do Compêndio
-   * (Garante atualizações consistentes via GitHub sem quebrar partidas em andamento)
-   */
   static async syncWorldDecksWithCompendium({ notify = true } = {}) {
     const pack = game.packs.get(`${MODULE_ID}.decks`);
     if (!pack) return 0;
 
-    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.0";
+    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.1";
     const packDocs = await pack.getDocuments();
     let updatedCount = 0;
 
@@ -71,7 +321,6 @@ export class CardEngine {
       const currentVersion = CardStateManager.getStackState(worldDeck).sourceVersion;
       if (currentVersion === moduleVersion) continue;
 
-      // Atualiza metadados, imagens e descrições das cartas existentes mantendo estado drawn/sort
       const updates = [];
       for (const srcCard of packDeck.cards) {
         const targetCard = worldDeck.cards.find((c) => c.name === srcCard.name && c.suit === srcCard.suit);
@@ -113,16 +362,11 @@ export class CardEngine {
   /* ======================================================================== */
 
   static mtg = {
-    /**
-     * Vira (Tap 90°) ou desvira (Untap 0°) uma carta na mesa (Atalho estilo Cockatrice: Duplo Clique)
-     * @param {Card} card
-     */
     async toggleTap(card) {
       const state = CardStateManager.getCardState(card);
       const nextTapped = !state.tapped;
       await CardStateManager.updateCardState(card, { tapped: nextTapped });
 
-      // Se houver Tile correspondente no Canvas (modo Standalone ou CCM), rotaciona 90 graus
       if (canvas?.ready) {
         const linkedTiles = canvas.scene.tiles.filter(
           (t) => t.getFlag(MODULE_ID, "cardUuid") === card.uuid
@@ -134,10 +378,6 @@ export class CardEngine {
       return nextTapped;
     },
 
-    /**
-     * Desvira todas as cartas de uma zona de campo de batalha (Ctrl+U no Cockatrice)
-     * @param {Cards} battlefieldPile
-     */
     async untapAll(battlefieldPile) {
       const updates = battlefieldPile.cards.map((c) => ({
         _id: c.id,
@@ -158,12 +398,6 @@ export class CardEngine {
       ui.notifications.info(game.i18n.localize("FVTT_CARD_TABLE.Notifications.UntappedAll"));
     },
 
-    /**
-     * Modifica um contador na carta (+1/+1, lealdade, carga)
-     * @param {Card} card
-     * @param {"plusOne"|"loyalty"|"charge"} counterType
-     * @param {number} delta
-     */
     async modifyCounter(card, counterType = "plusOne", delta = 1) {
       const state = CardStateManager.getCardState(card);
       const current = state.counters?.[counterType] ?? 0;
@@ -177,23 +411,12 @@ export class CardEngine {
       return nextVal;
     },
 
-    /**
-     * Anexa uma carta a outra (ex: Aura, Equipamento)
-     * @param {Card} attachmentCard
-     * @param {Card|null} targetCard
-     */
     async attachCard(attachmentCard, targetCard = null) {
       return CardStateManager.updateCardState(attachmentCard, {
         attachedTo: targetCard ? targetCard.id : null
       });
     },
 
-    /**
-     * Abre a janela de Scry / Peek nas X cartas do topo do baralho
-     * Permite colocar cartas no topo (em qualquer ordem) ou no fundo do grimório
-     * @param {Cards} deck
-     * @param {number} count
-     */
     async scry(deck, count = 2) {
       const available = [...deck.availableCards].sort((a, b) => a.sort - b.sort);
       const topCards = available.slice(0, count);
@@ -202,16 +425,10 @@ export class CardEngine {
         return;
       }
       const dialog = new ScryDialogApp({ deck, cards: topCards });
-      dialog.render(true);
+      dialog.render({ force: true });
       return dialog;
     },
 
-    /**
-     * Aplica a resolução do Scry (cartas que ficam no topo vs cartas enviadas ao fundo)
-     * @param {Cards} deck
-     * @param {string[]} topCardIds - IDs na ordem do topo
-     * @param {string[]} bottomCardIds - IDs enviados para o fundo
-     */
     async resolveScry(deck, topCardIds = [], bottomCardIds = []) {
       const allCards = [...deck.availableCards].sort((a, b) => a.sort - b.sort);
       const minSort = allCards.length ? allCards[0].sort : 0;
@@ -240,12 +457,6 @@ export class CardEngine {
       });
     },
 
-    /**
-     * Executa um London Mulligan: devolve a mão para o baralho, embaralha e compra N cartas
-     * @param {Cards} hand
-     * @param {Cards} deck
-     * @param {number} drawCount
-     */
     async mulligan(hand, deck, drawCount = 7) {
       await hand.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: false });
@@ -255,11 +466,6 @@ export class CardEngine {
       );
     },
 
-    /**
-     * Cria uma ficha (Token de criatura/tesouro) diretamente no Campo de Batalha
-     * @param {Cards} battlefieldPile
-     * @param {object} tokenConfig
-     */
     async createToken(
       battlefieldPile,
       { name = "Treasure Token", img = "icons/commodities/currency/coins-assorted-mix-copper-silver-gold.webp", power = "", toughness = "", types = ["Token", "Artifact", "Treasure"] } = {}
@@ -287,37 +493,54 @@ export class CardEngine {
   };
 
   /* ======================================================================== */
-  /*  MECÂNICAS DE POKER (TEXAS HOLD'EM / OMAHA)                              */
+  /*  MECÂNICAS DE POKER & CRUPIÊ (TEXAS HOLD'EM / OMAHA)                     */
   /* ======================================================================== */
 
   static poker = {
     /**
-     * Prepara uma nova rodada de Poker: recolhe todas as cartas, embaralha e distribui as Hole Cards
-     * @param {Cards} deck - Baralho de 52 cartas
-     * @param {Cards[]} playerHands - Mãos dos jogadores na mesa
-     * @param {number} holeCardCount - 2 para Texas Hold'em, 4 para Omaha
+     * Crupiê: Inicia uma nova rodada de Texas Hold'em
+     * - Recolhe todas as cartas da mesa, queima e mãos para o baralho
+     * - Embaralha o baralho
+     * - Distribui 2 Hole Cards fechadas na Mão Privada de cada jogador
      */
     async startRound(deck, playerHands = [], holeCardCount = 2) {
       await deck.recall({ chatNotification: false });
-      await deck.shuffle({ chatNotification: true });
+      await deck.shuffle({ chatNotification: false });
+
       if (playerHands.length > 0) {
         await deck.deal(playerHands, holeCardCount, {
           how: CONST.CARD_DRAW_MODES.TOP,
-          chatNotification: true
+          chatNotification: false
         });
       }
+
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (Texas Hold'em):</strong> Nova mão iniciada! Baralho embaralhado e ${holeCardCount} cartas privadas distribuídas para ${playerHands.length} jogador(es). Faça suas apostas (Pré-Flop)!</div>`
+      });
     },
 
     /**
-     * Queima 1 carta (Burn) e abre as cartas comunitárias (Flop = 3, Turn = 1, River = 1)
-     * @param {Cards} deck
-     * @param {Cards} burnPile
-     * @param {Cards} communityPile
-     * @param {"flop"|"turn"|"river"} stage
+     * Crupiê: Queima 1 carta (Burn) e abre as cartas comunitárias no centro da mesa
+     * (Flop = Slots 1, 2 e 3 | Turn = Slot 4 | River = Slot 5)
      */
     async dealCommunity(deck, burnPile, communityPile, stage = "flop") {
-      // 1. Queima 1 carta virada para baixo (face: null)
-      if (burnPile && deck.availableCards.length > 0) {
+      const existingCommunity = communityPile.cards.filter(
+        (c) => CardStateManager.getCardState(c).boardRole !== "showdown"
+      );
+
+      // Se o estágio for "auto", o Crupiê descobre sozinho se é Flop (0->3), Turn (3->4) ou River (4->5)
+      if (stage === "auto") {
+        if (existingCommunity.length === 0) stage = "flop";
+        else if (existingCommunity.length < 4) stage = "turn";
+        else if (existingCommunity.length === 4) stage = "river";
+        else {
+          ui.notifications.info("As 5 cartas comunitárias (Flop, Turn e River) já estão abertas na mesa!");
+          return [];
+        }
+      }
+
+      // 1. Crupiê queima 1 carta virada para baixo (Burn Card)
+      if (burnPile && burnPile.id !== communityPile.id && deck.availableCards.length > 0) {
         await burnPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
           updateData: { face: null },
@@ -325,26 +548,34 @@ export class CardEngine {
         });
       }
 
-      // 2. Abre as cartas comunitárias viradas para cima (face: 0)
+      // 2. Crupiê abre as cartas comunitárias na mesa e marca como "community"
       const count = stage === "flop" ? 3 : 1;
+      const startSlot = existingCommunity.length + 1;
       const drawn = await communityPile.draw(deck, count, {
         how: CONST.CARD_DRAW_MODES.TOP,
-        updateData: { face: 0 },
-        chatNotification: true
+        updateData: {
+          face: 0,
+          [`flags.${MODULE_ID}.state.boardRole`]: "community"
+        },
+        chatNotification: false
       });
 
+      // Numera os slots do Crupiê (1..5)
+      const slotUpdates = drawn.map((c, idx) => ({
+        _id: c.id,
+        [`flags.${MODULE_ID}.state.boardRole`]: "community",
+        [`flags.${MODULE_ID}.state.communitySlot`]: startSlot + idx
+      }));
+      if (slotUpdates.length) {
+        await communityPile.updateEmbeddedDocuments("Card", slotUpdates);
+      }
+
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>Poker (${stage.toUpperCase()}):</strong> ${drawn.map((c) => `[${c.name}]`).join(" ")}</div>`
+        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (${stage.toUpperCase()}):</strong> Queimou 1 carta e abriu ${drawn.map((c) => `<strong>[${c.name}]</strong>`).join(" ")} na mesa comunitária!</div>`
       });
       return drawn;
     },
 
-    /**
-     * Registra uma aposta no Pote da mesa
-     * @param {Cards} communityPile
-     * @param {number} amount
-     * @param {string} playerName
-     */
     async bet(communityPile, amount, playerName = game.user.name) {
       const state = CardStateManager.getStackState(communityPile);
       const nextPot = (state.pot ?? 0) + Number(amount);
@@ -364,19 +595,10 @@ export class CardEngine {
   /* ======================================================================== */
 
   static buraco = {
-    /**
-     * Prepara a mesa completa de Buraco:
-     * - Recolhe e embaralha o baralho duplo (104 ou 108 cartas)
-     * - Separa os 2 Mortos com 11 cartas cada (virados para baixo)
-     * - Distribui 11 cartas para cada jogador e ordena por naipe
-     * - Vira a 1ª carta do Lixo
-     * @param {object} config
-     */
     async setupTable({ deck, playerHands = [], morto1, morto2, lixoPile }) {
       await deck.recall({ chatNotification: false });
       await deck.shuffle({ chatNotification: false });
 
-      // Cria os dois Mortos de 11 cartas
       if (morto1) {
         await morto1.draw(deck, 11, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -392,7 +614,6 @@ export class CardEngine {
         });
       }
 
-      // Distribui 11 cartas para cada jogador e ordena por Naipe + Valor
       if (playerHands.length > 0) {
         await deck.deal(playerHands, 11, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -403,7 +624,6 @@ export class CardEngine {
         }
       }
 
-      // Vira a primeira carta do Lixo aberta
       if (lixoPile) {
         await lixoPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
@@ -413,15 +633,10 @@ export class CardEngine {
       }
 
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>Mesa de Buraco Pronta!</strong> 11 cartas distribuídas para ${playerHands.length} jogador(es), 2 Mortos separados e Lixo aberto.</div>`
+        content: `<div class="fvtt-card-table-chat"><strong>Mesa de Buraco Pronta!</strong> 11 cartas distribuídas para ${playerHands.length} jogador(es), Morto separado e Lixo aberto.</div>`
       });
     },
 
-    /**
-     * Compra o Lixo inteiro para a mão do jogador e reordena a mão por naipe
-     * @param {Cards} hand
-     * @param {Cards} lixoPile
-     */
     async buyTrash(hand, lixoPile) {
       const cardIds = lixoPile.cards.map((c) => c.id);
       if (cardIds.length === 0) {
@@ -433,19 +648,11 @@ export class CardEngine {
       return passed;
     },
 
-    /**
-     * Baixa um jogo (sequência/trinca) ou adiciona cartas a uma canastra existente na zona da dupla
-     * Calcula automaticamente se virou Canastra Limpa (7+ cartas sem curinga) ou Suja (com curinga)
-     * @param {Cards} hand
-     * @param {Cards} teamMeldPile
-     * @param {string[]} cardIds
-     * @param {string|null} meldGroupId
-     */
     async playMeld(hand, teamMeldPile, cardIds = [], meldGroupId = null) {
       if (cardIds.length === 0) return null;
       const groupId = meldGroupId ?? foundry.utils.randomID(8);
 
-      const movedCards = await hand.pass(teamMeldPile, cardIds, {
+      await hand.pass(teamMeldPile, cardIds, {
         updateData: {
           face: 0,
           [`flags.${MODULE_ID}.state.meldGroupId`]: groupId
@@ -453,7 +660,6 @@ export class CardEngine {
         chatNotification: false
       });
 
-      // Reordena as cartas do mesmo grupo por valor
       const groupCards = teamMeldPile.cards.filter(
         (c) => CardStateManager.getCardState(c).meldGroupId === groupId
       );
@@ -470,7 +676,6 @@ export class CardEngine {
       const updates = groupCards.map((c, idx) => ({
         _id: c.id,
         sort: (idx + 1) * 100,
-        // Atravessa a última carta a 90° se fechar canastra (tradição do Buraco)
         [`flags.${MODULE_ID}.state.tapped`]: isCanastra && idx === groupCards.length - 1
       }));
       if (updates.length) {
@@ -487,10 +692,6 @@ export class CardEngine {
       return { groupId, count: groupCards.length, isCanastra, isClean: isCanastra && !hasWildcard };
     },
 
-    /**
-     * Contabiliza os pontos totais de uma zona de jogos baixados da dupla
-     * @param {Cards} teamMeldPile
-     */
     calculateTeamScore(teamMeldPile) {
       let cardPoints = 0;
       const groups = new Map();

@@ -1,8 +1,8 @@
 {
   "id": "fvtt-card-table",
   "title": "DiogoLabs Card Table (Poker, Buraco, MTG & Cockatrice Engine)",
-  "description": "Sistema completo e agnóstico de manipulação de cartas para Foundry VTT v14. Inclui zonas estilo Cockatrice, automações para Poker, Buraco (Canastra) e Magic: The Gathering (Tap, Scry, Mulligan, Contadores, Anexos), Hand Dock em ApplicationV2 e integração opcional com Complete Card Management.",
-  "version": "1.0.0",
+  "description": "Sistema completo e agnóstico de manipulação de cartas para Foundry VTT v14. Inclui Crupiê Texas Hold'em (5 slots Flop/Turn/River + Showdown), Mãos Privadas automáticas por jogador, Buraco (Canastra) e Magic: The Gathering (Tap, Scry, Mulligan, Contadores).",
+  "version": "1.0.1",
   "compatibility": {
     "minimum": "12",
     "verified": "14",

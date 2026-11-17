@@ -4,13 +4,13 @@ import { CardEngine } from "../api/card-engine.mjs";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
- * Interface Principal de Mesa Virtual e Hand Dock (Inspirada no Cockatrice)
- * Construída em ApplicationV2 nativa do Foundry VTT v14
+ * Interface Principal de Mesa Virtual, Crupiê Texas Hold'em e Hand Dock
+ * Construída em ApplicationV2 nativa do Foundry VTT (v13/v14)
  */
 export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super(options);
-    this.activeGameMode = game.settings.get(MODULE_ID, "defaultGameMode") ?? "mtg";
+    this.activeGameMode = game.settings.get(MODULE_ID, "defaultGameMode") ?? "poker";
     this.selectedCardIds = new Set();
   }
 
@@ -20,16 +20,18 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     tag: "section",
     window: {
       title: "FVTT_CARD_TABLE.App.Title",
-      icon: "fa-solid fa-Playing-cards",
+      icon: "fa-solid fa-diamond",
       resizable: true,
       minimizable: true
     },
     position: {
-      width: 980,
-      height: 680
+      width: 1020,
+      height: 720
     },
     actions: {
       setGameMode: TabletopBoardApp.#onSetGameMode,
+      bootstrapZones: TabletopBoardApp.#onBootstrapZones,
+      ensureMyHand: TabletopBoardApp.#onEnsureMyHand,
       drawCard: TabletopBoardApp.#onDrawCard,
       shuffleDeck: TabletopBoardApp.#onShuffleDeck,
       recallDeck: TabletopBoardApp.#onRecallDeck,
@@ -44,6 +46,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       scryDeck: TabletopBoardApp.#onScryDeck,
       mulliganHand: TabletopBoardApp.#onMulliganHand,
       createToken: TabletopBoardApp.#onCreateToken,
+      pokerStartRound: TabletopBoardApp.#onPokerStartRound,
       pokerStage: TabletopBoardApp.#onPokerStage,
       pokerBet: TabletopBoardApp.#onPokerBet,
       buracoSetup: TabletopBoardApp.#onBuracoSetup,
@@ -59,30 +62,45 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   };
 
   /**
-   * Localiza ou sugere as pilhas ativas para cada zona da mesa
+   * Localiza as zonas ativas garantindo que cada jogador veja apenas sua própria Mão Privada
    */
   _resolveZones() {
     const decks = game.cards.filter((c) => c.type === "deck");
-    const hands = game.cards.filter((c) => c.type === "hand" && c.testUserPermission(game.user, "OWNER"));
+    const allHands = game.cards.filter((c) => c.type === "hand");
     const piles = game.cards.filter((c) => c.type === "pile");
 
-    const mainDeck = decks[0] ?? null;
-    const playerHand = hands[0] ?? null;
+    const mainDeck =
+      decks.find((d) => CardStateManager.getStackState(d).gameMode === this.activeGameMode) ??
+      decks[0] ??
+      null;
+
+    // Prioriza a mão vinculada exclusivamente ao ID do usuário logado (evita que o GM veja a mão de outro jogador)
+    const playerHand =
+      allHands.find((h) => CardStateManager.getStackState(h).ownerUserId === game.user.id) ??
+      allHands.find((h) => h.name === `Mão de ${game.user.name}`) ??
+      allHands.find((h) => !game.user.isGM && h.testUserPermission(game.user, "OWNER")) ??
+      null;
+
     const battlefieldPile =
       piles.find((p) => ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(p).zoneType)) ??
       piles[0] ??
       null;
+
     const discardPile =
-      piles.find((p) => ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(p).zoneType)) ??
-      piles[1] ??
-      piles[0] ??
+      piles.find(
+        (p) =>
+          p.id !== battlefieldPile?.id &&
+          ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(p).zoneType)
+      ) ??
+      piles.find((p) => p.id !== battlefieldPile?.id) ??
       null;
+
     const secondaryPile =
       piles.find((p) => ["exile", "morto"].includes(CardStateManager.getStackState(p).zoneType)) ??
       piles[2] ??
       null;
 
-    return { mainDeck, playerHand, battlefieldPile, discardPile, secondaryPile, decks, hands, piles };
+    return { mainDeck, playerHand, battlefieldPile, discardPile, secondaryPile, decks, allHands, piles };
   }
 
   async _prepareContext(options) {
@@ -101,6 +119,9 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
         isFaceDown: card.face === null,
         selected: this.selectedCardIds.has(card.id),
         tapped: state.tapped,
+        boardRole: state.boardRole,
+        communitySlot: state.communitySlot,
+        playedBy: state.playedBy,
         attachedTo: state.attachedTo,
         meldGroupId: state.meldGroupId,
         counters: state.counters,
@@ -134,6 +155,32 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
         }
       : null;
 
+    const allBattlefieldCards = zones.battlefieldPile
+      ? [...zones.battlefieldPile.cards.contents]
+          .sort((a, b) => a.sort - b.sort)
+          .map(formatCard)
+      : [];
+
+    // Para o Poker: separa os 5 Slots do Crupiê (Flop 1-3, Turn 4, River 5) das cartas jogadas pelos jogadores (Showdown)
+    const communityCards = allBattlefieldCards.filter((c) => c.boardRole !== "showdown");
+    const showdownCards = allBattlefieldCards.filter((c) => c.boardRole === "showdown");
+
+    const slotLabels = [
+      { slot: 1, stage: "FLOP 1" },
+      { slot: 2, stage: "FLOP 2" },
+      { slot: 3, stage: "FLOP 3" },
+      { slot: 4, stage: "TURN" },
+      { slot: 5, stage: "RIVER" }
+    ];
+
+    context.dealerSlots = slotLabels.map((s, idx) => ({
+      slot: s.slot,
+      label: s.stage,
+      card: communityCards[idx] ?? null
+    }));
+
+    context.showdownCards = showdownCards;
+
     context.battlefield = zones.battlefieldPile
       ? {
           id: zones.battlefieldPile.id,
@@ -142,9 +189,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
           buracoScore: context.isBuraco
             ? CardEngine.buraco.calculateTeamScore(zones.battlefieldPile)
             : null,
-          cards: [...zones.battlefieldPile.cards.contents]
-            .sort((a, b) => a.sort - b.sort)
-            .map(formatCard)
+          cards: allBattlefieldCards
         }
       : null;
 
@@ -168,13 +213,27 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   /* ======================================================================== */
 
   static async #onSetGameMode(event, target) {
-    this.activeGameMode = target.dataset.mode || "mtg";
+    this.activeGameMode = target.dataset.mode || "poker";
+    await this.render();
+  }
+
+  static async #onBootstrapZones() {
+    await CardEngine.bootstrapWorldZones(this.activeGameMode);
+    await this.render();
+  }
+
+  static async #onEnsureMyHand() {
+    await CardEngine.ensureUserPrivateHand(game.user);
     await this.render();
   }
 
   static async #onDrawCard(event, target) {
-    const { mainDeck, playerHand } = this._resolveZones();
-    if (!mainDeck || !playerHand) return;
+    let { mainDeck, playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    if (!mainDeck) {
+      const setup = await CardEngine.bootstrapWorldZones(this.activeGameMode);
+      mainDeck = setup.deck;
+    }
     const count = Number(target.dataset.count ?? 1);
     await playerHand.draw(mainDeck, count, { how: CONST.CARD_DRAW_MODES.TOP });
     await this.render();
@@ -212,15 +271,24 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   }
 
   static async #onPlayCardToTable(event, target) {
-    const { playerHand, battlefieldPile } = this._resolveZones();
-    if (!playerHand || !battlefieldPile) return;
+    let { playerHand, battlefieldPile } = this._resolveZones();
+    if (!playerHand) return;
+    if (!battlefieldPile) {
+      const setup = await CardEngine.bootstrapWorldZones(this.activeGameMode);
+      battlefieldPile = setup.battlefieldPile;
+    }
+
     const cardId = target.closest("[data-card-id]")?.dataset.cardId;
     const ids = cardId ? [cardId] : [...this.selectedCardIds];
     if (ids.length === 0) return;
 
-    const faceDown = event.shiftKey; // Shift + clique joga virada para baixo (estilo Cockatrice)
+    const faceDown = event.shiftKey;
     await playerHand.pass(battlefieldPile, ids, {
-      updateData: { face: faceDown ? null : 0 },
+      updateData: {
+        face: faceDown ? null : 0,
+        [`flags.${MODULE_ID}.state.boardRole`]: this.activeGameMode === "poker" ? "showdown" : "battlefield",
+        [`flags.${MODULE_ID}.state.playedBy`]: game.user.name
+      },
       chatNotification: true
     });
     ids.forEach((id) => this.selectedCardIds.delete(id));
@@ -228,8 +296,11 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   }
 
   static async #onDiscardCard(event, target) {
-    const { playerHand, battlefieldPile, discardPile } = this._resolveZones();
-    if (!discardPile) return;
+    let { playerHand, battlefieldPile, discardPile } = this._resolveZones();
+    if (!discardPile) {
+      const setup = await CardEngine.bootstrapWorldZones(this.activeGameMode);
+      discardPile = setup.discardPile;
+    }
     const cardEl = target.closest("[data-card-id]");
     const cardId = cardEl?.dataset.cardId;
     const zone = cardEl?.dataset.zone;
@@ -304,30 +375,65 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     await this.render();
   }
 
+  static async #onPokerStartRound() {
+    let { mainDeck } = this._resolveZones();
+    if (!mainDeck) {
+      const setup = await CardEngine.bootstrapWorldZones("poker");
+      mainDeck = setup.deck;
+    }
+    // Garante que cada jogador tenha sua mão privada e distribui 2 Hole Cards para cada um
+    const playerHands = [];
+    for (const u of game.users.contents) {
+      const h = await CardEngine.ensureUserPrivateHand(u);
+      if (h) playerHands.push(h);
+    }
+    await CardEngine.poker.startRound(mainDeck, playerHands, 2);
+    await this.render();
+  }
+
   static async #onPokerStage(event, target) {
-    const { mainDeck, battlefieldPile, discardPile } = this._resolveZones();
-    if (!mainDeck || !battlefieldPile) return;
-    const stage = target.dataset.stage || "flop";
+    let { mainDeck, battlefieldPile, discardPile } = this._resolveZones();
+    if (!mainDeck || !battlefieldPile || !discardPile) {
+      const setup = await CardEngine.bootstrapWorldZones("poker");
+      mainDeck = setup.deck;
+      battlefieldPile = setup.battlefieldPile;
+      discardPile = setup.discardPile;
+    }
+    const stage = target.dataset.stage || "auto";
     await CardEngine.poker.dealCommunity(mainDeck, discardPile, battlefieldPile, stage);
     await this.render();
   }
 
   static async #onPokerBet(event, target) {
-    const { battlefieldPile } = this._resolveZones();
-    if (!battlefieldPile) return;
+    let { battlefieldPile } = this._resolveZones();
+    if (!battlefieldPile) {
+      const setup = await CardEngine.bootstrapWorldZones("poker");
+      battlefieldPile = setup.battlefieldPile;
+    }
     const amount = Number(target.dataset.amount ?? 10);
     await CardEngine.poker.bet(battlefieldPile, amount);
     await this.render();
   }
 
   static async #onBuracoSetup() {
-    const { mainDeck, hands, battlefieldPile, discardPile, secondaryPile } = this._resolveZones();
-    if (!mainDeck) return;
+    let { mainDeck, battlefieldPile, discardPile, secondaryPile } = this._resolveZones();
+    if (!mainDeck || !battlefieldPile || !discardPile) {
+      const setup = await CardEngine.bootstrapWorldZones("buraco");
+      mainDeck = setup.deck;
+      battlefieldPile = setup.battlefieldPile;
+      discardPile = setup.discardPile;
+    }
+    const playerHands = [];
+    for (const u of game.users.contents) {
+      const h = await CardEngine.ensureUserPrivateHand(u);
+      if (h) playerHands.push(h);
+    }
+    secondaryPile = game.cards.find((c) => c.type === "pile" && CardStateManager.getStackState(c).zoneType === "morto");
     await CardEngine.buraco.setupTable({
       deck: mainDeck,
-      playerHands: hands,
+      playerHands,
       morto1: secondaryPile,
-      lixoPile: discardPile ?? battlefieldPile
+      lixoPile: discardPile
     });
     await this.render();
   }
@@ -353,9 +459,6 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   }
 }
 
-/**
- * Dialogo ApplicationV2 para Scry / Peek (Olhar e ordenar topo/fundo do baralho)
- */
 export class ScryDialogApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor({ deck, cards = [] }, options = {}) {
     super(options);
