@@ -23,6 +23,7 @@ Hooks.once("init", () => {
     config: true,
     type: String,
     choices: {
+      standard: "Padrão (Sistema Integrado do Foundry)",
       poker: "Poker (Texas Hold'em / Crupiê)",
       buraco: "Buraco / Canastra",
       mtg: "Magic: The Gathering / Cockatrice"

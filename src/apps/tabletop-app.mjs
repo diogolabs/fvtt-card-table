@@ -12,6 +12,9 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     super(options);
     this.selectedCardIds = new Set();
     this.soloViewActive = false;
+    this.selectedDeckId = null;
+    this.selectedTablePileId = null;
+    this.selectedDiscardPileId = null;
   }
 
   get activeGameMode() {
@@ -67,7 +70,17 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       soloFold: TabletopBoardApp.#onSoloFold,
       buracoSetup: TabletopBoardApp.#onBuracoSetup,
       buracoBuyTrash: TabletopBoardApp.#onBuracoBuyTrash,
-      buracoPlayMeld: TabletopBoardApp.#onBuracoPlayMeld
+      buracoPlayMeld: TabletopBoardApp.#onBuracoPlayMeld,
+      selectActiveDeck: TabletopBoardApp.#onSelectActiveDeck,
+      selectTablePile: TabletopBoardApp.#onSelectTablePile,
+      selectDiscardTarget: TabletopBoardApp.#onSelectDiscardTarget,
+      openStackSheet: TabletopBoardApp.#onOpenStackSheet,
+      standardDealHands: TabletopBoardApp.#onStandardDealHands,
+      takeCardToHand: TabletopBoardApp.#onTakeCardToHand,
+      drawTopDiscard: TabletopBoardApp.#onDrawTopDiscard,
+      returnDiscardToDeck: TabletopBoardApp.#onReturnDiscardToDeck,
+      createDiscardPile: TabletopBoardApp.#onCreateDiscardPile,
+      passSelectedToHand: TabletopBoardApp.#onPassSelectedToHand
     }
   };
 
@@ -85,6 +98,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     const piles = game.cards.filter((c) => c.type === "pile");
 
     const mainDeck =
+      (this.selectedDeckId ? decks.find((d) => d.id === this.selectedDeckId) : null) ??
       decks.find((d) => CardStateManager.getStackState(d).gameMode === mode) ??
       decks[0] ??
       null;
@@ -96,16 +110,21 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       null;
 
     const battlefieldPile =
+      (this.selectedTablePileId ? piles.find((p) => p.id === this.selectedTablePileId) : null) ??
       piles.find((p) => ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(p).zoneType)) ??
       piles[0] ??
       null;
 
+    // Todas as pilhas de descarte existentes no mundo (além da Pilha da Mesa)
+    const discardPiles = piles.filter((p) => {
+      if (p.id === battlefieldPile?.id) return false;
+      if (mode === "standard") return true;
+      return ["graveyard", "lixo", "burn", "discard"].includes(CardStateManager.getStackState(p).zoneType);
+    });
+
     const discardPile =
-      piles.find(
-        (p) =>
-          p.id !== battlefieldPile?.id &&
-          ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(p).zoneType)
-      ) ??
+      (this.selectedDiscardPileId ? discardPiles.find((p) => p.id === this.selectedDiscardPileId) : null) ??
+      discardPiles[0] ??
       piles.find((p) => p.id !== battlefieldPile?.id) ??
       null;
 
@@ -114,7 +133,17 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       piles[2] ??
       null;
 
-    return { mainDeck, playerHand, battlefieldPile, discardPile, secondaryPile, decks, allHands, piles };
+    return {
+      mainDeck,
+      playerHand,
+      battlefieldPile,
+      discardPile,
+      discardPiles,
+      secondaryPile,
+      decks,
+      allHands,
+      piles
+    };
   }
 
   async _prepareContext(options) {
@@ -147,15 +176,18 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
 
     context.isGM = game.user.isGM;
     context.gameMode = mode;
+    context.isStandard = mode === "standard";
     context.isMtg = mode === "mtg";
     context.isPoker = mode === "poker";
     context.isBuraco = mode === "buraco";
     context.gameModeLabel =
-      mode === "poker"
-        ? "Poker (Texas Hold'em)"
-        : mode === "buraco"
-          ? "Buraco / Canastra"
-          : "Magic: The Gathering / Cockatrice";
+      mode === "standard"
+        ? "Modo Padrão (Foundry VTT)"
+        : mode === "poker"
+          ? "Poker (Texas Hold'em)"
+          : mode === "buraco"
+            ? "Buraco / Canastra"
+            : "Magic: The Gathering / Cockatrice";
     context.ccmActive = game.modules.get("complete-card-management")?.active ?? false;
 
     context.deck = zones.mainDeck
@@ -317,6 +349,45 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
         }
       : null;
 
+    // Dados completos do Modo Padrão (Decks disponíveis, Mãos dos Jogadores e todas as Pilhas de Descarte, se houverem)
+    context.availableDecks = zones.decks.map((d) => ({
+      id: d.id,
+      name: d.name,
+      availableCount: d.availableCards.length,
+      totalCount: d.cards.size,
+      isSelected: d.id === zones.mainDeck?.id
+    }));
+    context.hasMultipleDecks = zones.decks.length > 1;
+
+    context.availableTablePiles = zones.piles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      count: p.cards.size,
+      isSelected: p.id === zones.battlefieldPile?.id
+    }));
+    context.hasMultiplePiles = zones.piles.length > 1;
+
+    context.discardPiles = zones.discardPiles.map((p) => {
+      const top = p.cards.contents.at(-1);
+      return {
+        id: p.id,
+        name: p.name,
+        count: p.cards.size,
+        isTarget: p.id === zones.discardPile?.id,
+        topCard: top ? formatCard(top) : null
+      };
+    });
+    context.hasDiscardPiles = context.discardPiles.length > 0;
+    context.hasMultipleDiscardPiles = context.discardPiles.length > 1;
+
+    context.playerHandsList = zones.allHands.map((h) => ({
+      id: h.id,
+      name: h.name,
+      shortName: h.name.replace(/^Mão de\s+/i, ""),
+      count: h.cards.size,
+      isMine: h.id === zones.playerHand?.id
+    }));
+
     return context;
   }
 
@@ -350,7 +421,11 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       mainDeck = setup.deck;
     }
     const count = Number(target.dataset.count ?? 1);
-    await playerHand.draw(mainDeck, count, { how: CONST.CARD_DRAW_MODES.TOP });
+    const faceDown = event.shiftKey || target.dataset.facedown === "true";
+    await playerHand.draw(mainDeck, count, {
+      how: CONST.CARD_DRAW_MODES.TOP,
+      updateData: faceDown ? { face: null } : { face: 0 }
+    });
     await this.render();
   }
 
@@ -694,6 +769,115 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       return;
     }
     await CardEngine.buraco.playMeld(playerHand, battlefieldPile, ids);
+    this.selectedCardIds.clear();
+    await this.render();
+  }
+
+  /* ======================================================================== */
+  /*  ACTIONS DO MODO PADRÃO (FOUNDRY NATIVO INTEGRADO)                       */
+  /* ======================================================================== */
+
+  static async #onSelectActiveDeck(event, target) {
+    const deckId = target.dataset.deckId || target.value;
+    if (!deckId) return;
+    this.selectedDeckId = deckId;
+    await this.render();
+  }
+
+  static async #onSelectTablePile(event, target) {
+    const pileId = target.dataset.pileId || target.value;
+    if (!pileId) return;
+    this.selectedTablePileId = pileId;
+    await this.render();
+  }
+
+  static async #onSelectDiscardTarget(event, target) {
+    const pileId = target.dataset.pileId;
+    if (!pileId) return;
+    this.selectedDiscardPileId = pileId;
+    await this.render();
+  }
+
+  static async #onOpenStackSheet(event, target) {
+    const stackId = target.dataset.stackId;
+    const stack = game.cards.get(stackId);
+    if (!stack) return;
+    stack.sheet?.render(true);
+  }
+
+  static async #onStandardDealHands(event, target) {
+    if (!game.user.isGM) return;
+    let { mainDeck, allHands } = this._resolveZones();
+    if (!mainDeck) {
+      const setup = await CardEngine.bootstrapWorldZones("standard");
+      mainDeck = setup.deck;
+    }
+    if (allHands.length === 0) {
+      for (const u of game.users.contents) {
+        const h = await CardEngine.ensureUserPrivateHand(u);
+        if (h) allHands.push(h);
+      }
+    }
+    const count = Number(target.dataset.count ?? 1);
+    const faceDown = event.shiftKey;
+    await CardEngine.standard.dealToAllHands(mainDeck, allHands, count, { faceDown });
+    await this.render();
+  }
+
+  static async #onTakeCardToHand(event, target) {
+    let { playerHand, battlefieldPile } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    const cardEl = target.closest("[data-card-id]");
+    const cardId = cardEl?.dataset.cardId;
+    const sourcePileId = target.dataset.pileId || cardEl?.dataset.pileId;
+    const sourcePile = sourcePileId ? game.cards.get(sourcePileId) : battlefieldPile;
+    if (!sourcePile || !cardId) return;
+
+    await CardEngine.standard.takeCardToHand(sourcePile, playerHand, cardId);
+    await this.render();
+  }
+
+  static async #onDrawTopDiscard(event, target) {
+    let { playerHand, discardPile } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    const pileId = target.dataset.pileId;
+    const pile = pileId ? game.cards.get(pileId) : discardPile;
+    const topCard = pile?.cards.contents.at(-1);
+    if (!pile || !topCard) {
+      ui.notifications.warn("Esta pilha de descarte está vazia.");
+      return;
+    }
+    await CardEngine.standard.takeCardToHand(pile, playerHand, topCard.id);
+    await this.render();
+  }
+
+  static async #onReturnDiscardToDeck(event, target) {
+    const { mainDeck, discardPile } = this._resolveZones();
+    const pileId = target.dataset.pileId;
+    const pile = pileId ? game.cards.get(pileId) : discardPile;
+    if (!pile || !mainDeck) return;
+    await CardEngine.standard.returnPileToDeck(pile, mainDeck);
+    await this.render();
+  }
+
+  static async #onCreateDiscardPile() {
+    if (!game.user.isGM) return;
+    const created = await CardEngine.standard.createDiscardPile();
+    if (created) this.selectedDiscardPileId = created.id;
+    await this.render();
+  }
+
+  static async #onPassSelectedToHand(event, target) {
+    const { playerHand } = this._resolveZones();
+    const targetHandId = target.dataset.targetHandId;
+    const targetHand = game.cards.get(targetHandId);
+    if (!playerHand || !targetHand) return;
+    const ids = [...this.selectedCardIds];
+    if (ids.length === 0) {
+      ui.notifications.warn("Selecione uma ou mais cartas na sua mão clicando nelas primeiro.");
+      return;
+    }
+    await CardEngine.standard.passToOtherHand(playerHand, targetHand, ids);
     this.selectedCardIds.clear();
     await this.render();
   }

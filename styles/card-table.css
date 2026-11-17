@@ -676,3 +676,63 @@
 .fvtt-ct-solo-card-back i {
   font-size: 28px;
 }
+
+/* ========================================================================== */
+/*  MODO PADRÃO (INTEGRAÇÃO NATIVA FOUNDRY: DECKS, MÃOS, MESA E DESCARTES)    */
+/* ========================================================================== */
+
+.fvtt-ct-zone-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.fvtt-ct-zone-title-row h4 {
+  margin: 0 !important;
+}
+
+.fvtt-ct-zone-mini-actions,
+.fvtt-ct-stack-switcher {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fvtt-ct-stack-switcher {
+  margin-bottom: 6px;
+}
+
+.fvtt-ct-btn.mini {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.fvtt-ct-icon-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #e2e8f0;
+  padding: 2px 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.fvtt-ct-icon-btn:hover {
+  background: #c9983e;
+  color: #111;
+}
+
+.fvtt-ct-zone-box.is-active-discard {
+  border-color: rgba(212, 175, 55, 0.65);
+}
+
+.fvtt-ct-card-mini-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
