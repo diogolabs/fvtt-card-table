@@ -1,12 +1,21 @@
+/* Garante barra de rolagem vertical e horizontal na janela em qualquer resolução de monitor */
+.fvtt-card-table-app .window-content {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  padding: 6px;
+}
+
 .fvtt-card-table-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
   gap: 10px;
   padding: 8px;
   color: #f0f0f0;
-  background: radial-gradient(circle at center, #1b3b2b 0%, #0f2218 100%);
+  background: radial-gradient(circle at center, #1b4332 0%, #0d2118 100%);
   border-radius: 6px;
+  overflow-y: visible;
 }
 
 .fvtt-ct-toolbar {
@@ -16,8 +25,18 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 6px;
+}
+
+.fvtt-ct-gm-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
 }
 
 .fvtt-ct-modes,
@@ -27,6 +46,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .fvtt-ct-btn {
@@ -49,19 +69,86 @@
   font-weight: 600;
 }
 
+.fvtt-ct-btn.danger {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.fvtt-ct-btn.danger:hover {
+  background: #b91c1c;
+}
+
+.fvtt-ct-btn.allin-btn {
+  background: linear-gradient(135deg, #d97706, #b91c1c);
+  border-color: #fde047;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* FICHAS REDONDAS DE APOSTA (+10, +25, +50, +100) */
+.fvtt-ct-chip-btn {
+  width: 34px;
+  height: 30px;
+  border-radius: 15px;
+  border: 2px dashed #fff;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.fvtt-ct-chip-btn.chip-10 {
+  background: #1d4ed8;
+}
+
+.fvtt-ct-chip-btn.chip-25 {
+  background: #15803d;
+}
+
+.fvtt-ct-chip-btn.chip-50 {
+  background: #b91c1c;
+}
+
+.fvtt-ct-chip-btn.chip-100 {
+  background: #18181b;
+  border-color: #facc15;
+  color: #facc15;
+}
+
+.fvtt-ct-custom-bet-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fvtt-ct-custom-bet-input {
+  width: 58px !important;
+  height: 26px !important;
+  padding: 2px 6px !important;
+  font-size: 12px !important;
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 4px !important;
+}
+
 .fvtt-ct-main-grid {
   display: grid;
-  grid-template-columns: 210px 1fr;
+  grid-template-columns: 200px 1fr;
   gap: 10px;
-  flex: 1;
-  min-height: 260px;
-  overflow: hidden;
+  align-items: start;
 }
 
 .fvtt-ct-sidebar-zones {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .fvtt-ct-zone-box {
@@ -71,14 +158,163 @@
   padding: 8px;
 }
 
+.fvtt-ct-zone-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+}
+
+.fvtt-ct-deck-counter {
+  font-size: 11px;
+  margin-bottom: 6px;
+  color: #ccc;
+}
+
+/* Área de Descarte / Queima compacta */
+.fvtt-ct-discard-box {
+  max-height: 140px;
+}
+
+.fvtt-ct-card-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.fvtt-ct-card-mini img {
+  width: 44px !important;
+  height: 62px !important;
+  min-width: 44px;
+  max-width: 44px;
+  max-height: 62px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.fvtt-ct-card-mini-label {
+  font-size: 11px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* PLACAR DE FICHAS DOS JOGADORES */
+.fvtt-ct-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fvtt-ct-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.fvtt-ct-player-row.is-folded {
+  opacity: 0.55;
+}
+
+.fvtt-ct-player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fvtt-ct-player-chips {
+  color: #facc15;
+  font-weight: 700;
+}
+
+.fvtt-ct-player-bet {
+  font-size: 10px;
+  color: #93c5fd;
+}
+
+.fvtt-ct-folded-tag {
+  font-size: 9px;
+  color: #f87171;
+  font-weight: 700;
+}
+
+.fvtt-ct-btn.award-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: #ca8a04;
+  color: #111;
+  font-weight: 700;
+}
+
 .fvtt-ct-battlefield {
   display: flex;
   flex-direction: column;
+  gap: 10px;
   background: rgba(0, 0, 0, 0.28);
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  border-radius: 6px;
+  border: 2px solid rgba(212, 175, 55, 0.35);
+  border-radius: 8px;
   padding: 10px;
-  overflow-y: auto;
+}
+
+/* SLOTS DO CRUPIÊ TEXAS HOLD'EM (FLOP 1-3, TURN, RIVER) */
+.fvtt-ct-dealer-board {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-dealer-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 108px;
+}
+
+.fvtt-ct-slot-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #f3c86b;
+  text-transform: uppercase;
+}
+
+.fvtt-ct-slot-placeholder {
+  width: 104px;
+  height: 146px;
+  border: 2px dashed rgba(243, 200, 107, 0.35);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.fvtt-ct-showdown-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-top: 8px;
+}
+
+.fvtt-ct-showdown-section h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #f3c86b;
 }
 
 .fvtt-ct-badge-gold {
@@ -90,19 +326,28 @@
   font-weight: 700;
 }
 
+.fvtt-ct-current-bet-badge {
+  background: rgba(29, 78, 216, 0.85);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
 .fvtt-ct-card-grid,
 .fvtt-ct-hand-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
 .fvtt-ct-card {
-  width: 112px;
-  background: rgba(18, 22, 20, 0.9);
-  border: 2px solid rgba(255, 255, 255, 0.18);
+  width: 104px;
+  background: rgba(18, 22, 20, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   padding: 4px;
   display: flex;
@@ -117,7 +362,6 @@
   transform: translateY(-6px);
 }
 
-/* Rotação de 90 graus para Tap no MTG ou Canastra fechada no Buraco */
 .fvtt-ct-card.is-tapped {
   transform: rotate(90deg);
   margin: 14px 18px;
@@ -127,7 +371,7 @@
 .fvtt-ct-card-image-wrap {
   position: relative;
   width: 100%;
-  height: 140px;
+  height: 122px;
   overflow: hidden;
   border-radius: 4px;
   cursor: pointer;
@@ -156,10 +400,11 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.82);
   color: #ffd700;
   font-size: 10px;
-  padding: 1px 5px;
+  font-weight: 600;
+  padding: 2px 5px;
   border-radius: 4px;
 }
 
@@ -189,18 +434,47 @@
   border-top: 2px solid rgba(212, 175, 55, 0.45);
   border-radius: 6px;
   padding: 8px 10px;
-  max-height: 245px;
-  overflow-x: auto;
 }
 
 .fvtt-ct-hand-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
-/* Scry Dialog */
+.fvtt-ct-hand-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-hand-title-group h4 {
+  margin: 0;
+}
+
+.fvtt-ct-chip-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+
+.fvtt-ct-wallet-balance strong {
+  color: #facc15;
+}
+
+.fvtt-ct-wallet-round strong {
+  color: #93c5fd;
+}
+
 .fvtt-ct-scry-container {
   display: flex;
   flex-direction: column;

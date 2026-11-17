@@ -9,6 +9,9 @@ export const DEFAULT_CARD_STATE = {
   attachedTo: null,           // ID da carta à qual esta carta está anexada (Aura/Equipamento)
   meldGroupId: null,          // ID do jogo/sequência baixada na mesa (Buraco)
   isWildcard: false,          // Curinga (Joker ou 2 no Buraco)
+  boardRole: null,            // "community" (Flop/Turn/River do Crupiê) | "showdown" (Carta de jogador)
+  communitySlot: null,        // 1..3 (Flop), 4 (Turn), 5 (River)
+  playedBy: "",               // Nome do jogador que baixou a carta na mesa
   peekingUsers: [],           // IDs de jogadores que podem espiar a carta mesmo virada para baixo
   counters: {
     plusOne: 0,               // Marcadores +1/+1 (MTG)
@@ -32,67 +35,49 @@ export const DEFAULT_CARD_STATE = {
 export const DEFAULT_STACK_STATE = {
   gameMode: "generic",        // "generic" | "poker" | "buraco" | "mtg"
   zoneType: "deck",           // "library" | "hand" | "battlefield" | "graveyard" | "exile" | "command" | "lixo" | "morto" | "meld" | "community" | "burn"
-  pot: 0,                     // Pote acumulado (Poker)
-  currentBet: 0,              // Aposta atual da rodada (Poker)
+  ownerUserId: null,          // ID do usuário dono exclusivo desta Mão Privada
+  chips: 1000,                // Saldo de fichas do jogador dono desta mão (Poker)
+  roundBet: 0,                // Valor já apostado pelo jogador na rodada atual (Poker)
+  folded: false,              // Se o jogador desistiu (Fold) na mão atual (Poker)
+  pot: 0,                     // Pote acumulado na mesa (Poker)
+  currentBet: 0,              // Maior aposta atual da rodada na mesa (Poker)
   teamId: null,               // Dupla dona da zona de jogos baixados (Buraco)
   sourceCompendiumUuid: null, // UUID do Compêndio de origem para sincronização de versão
-  sourceVersion: "1.0.0"
+  sourceVersion: "1.0.3"
 };
 
 /**
  * Utilitário para ler e gravar estados consistentes nos documentos Card e Cards
  */
 export class CardStateManager {
-  /**
-   * Obtém o estado completo da carta mesclado com os padrões
-   * @param {Card} card
-   */
   static getCardState(card) {
     const raw = card.getFlag(MODULE_ID, "state") ?? {};
     return foundry.utils.mergeObject(foundry.utils.deepClone(DEFAULT_CARD_STATE), raw);
   }
 
-  /**
-   * Atualiza parcialmente o estado da carta
-   * @param {Card} card
-   * @param {object} patch
-   */
   static async updateCardState(card, patch) {
     const current = this.getCardState(card);
     const updated = foundry.utils.mergeObject(current, patch, { inplace: false });
     return card.setFlag(MODULE_ID, "state", updated);
   }
 
-  /**
-   * Obtém o estado completo de uma pilha/zona (Cards)
-   * @param {Cards} stack
-   */
   static getStackState(stack) {
     const raw = stack.getFlag(MODULE_ID, "stackState") ?? {};
     return foundry.utils.mergeObject(foundry.utils.deepClone(DEFAULT_STACK_STATE), raw);
   }
 
-  /**
-   * Atualiza parcialmente o estado de uma pilha/zona (Cards)
-   * @param {Cards} stack
-   * @param {object} patch
-   */
   static async updateStackState(stack, patch) {
     const current = this.getStackState(stack);
     const updated = foundry.utils.mergeObject(current, patch, { inplace: false });
     return stack.setFlag(MODULE_ID, "stackState", updated);
   }
 
-  /**
-   * Calcula automaticamente a pontuação de uma carta no Buraco caso não esteja definida
-   * @param {Card} card
-   */
   static getBuracoPointValue(card) {
     const state = this.getCardState(card);
     if (state.metadata?.pointValue > 0) return state.metadata.pointValue;
     if (card.suit === "joker" || card.value === 0) return 20;
-    if (card.value === 1 || card.value === 14) return 15; // Ás
-    if (card.value === 2) return 10; // Curinga numérico (2)
+    if (card.value === 1 || card.value === 14) return 15;
+    if (card.value === 2) return 10;
     if (card.value >= 8 && card.value <= 13) return 10;
     if (card.value >= 3 && card.value <= 7) return 5;
     return 5;

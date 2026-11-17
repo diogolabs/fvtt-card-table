@@ -11,10 +11,10 @@ function openCardTableBoard() {
 }
 
 /* ========================================================================== */
-/*  HOOK: INIT (Configurações, API Pública e Keybindings para Foundry v13)    */
+/*  HOOK: INIT (Configurações, API Pública e Keybindings)                     */
 /* ========================================================================== */
 Hooks.once("init", () => {
-  console.log(`${MODULE_ID} | Inicializando módulo de cartas para Foundry VTT v13`);
+  console.log(`${MODULE_ID} | Inicializando módulo de cartas (Poker, Buraco, MTG & Cockatrice)`);
 
   game.settings.register(MODULE_ID, "defaultGameMode", {
     name: "FVTT_CARD_TABLE.Settings.DefaultGameMode.Name",
@@ -23,11 +23,16 @@ Hooks.once("init", () => {
     config: true,
     type: String,
     choices: {
-      mtg: "Magic: The Gathering / Cockatrice",
-      poker: "Poker (Texas Hold'em / Omaha)",
-      buraco: "Buraco / Canastra"
+      poker: "Poker (Texas Hold'em / Crupiê)",
+      buraco: "Buraco / Canastra",
+      mtg: "Magic: The Gathering / Cockatrice"
     },
-    default: "mtg"
+    default: "poker",
+    onChange: () => {
+      if (tabletopBoardInstance?.rendered) {
+        tabletopBoardInstance.render();
+      }
+    }
   });
 
   game.settings.register(MODULE_ID, "autoSyncCompendiums", {
@@ -61,15 +66,20 @@ Hooks.once("init", () => {
 });
 
 /* ========================================================================== */
-/*  HOOK: READY (Sincronização de Compêndios e Integração Opcional com CCM)   */
+/*  HOOK: READY (Mãos Privadas Automáticas e Sincronização de Compêndios)     */
 /* ========================================================================== */
 Hooks.once("ready", async () => {
-  if (game.user.isGM && game.settings.get(MODULE_ID, "autoSyncCompendiums")) {
-    await CardEngine.syncWorldDecksWithCompendium({ notify: true });
+  if (game.user.isGM) {
+    if (game.settings.get(MODULE_ID, "autoSyncCompendiums")) {
+      await CardEngine.syncWorldDecksWithCompendium({ notify: true });
+    }
+    for (const u of game.users.contents) {
+      await CardEngine.ensureUserPrivateHand(u);
+    }
   }
 
   if (game.modules.get("complete-card-management")?.active) {
-    console.log(`${MODULE_ID} | Complete Card Management detectado no Foundry v13!`);
+    console.log(`${MODULE_ID} | Complete Card Management detectado! Ativando ponte de compatibilidade.`);
     Hooks.on("ccm.dropCard", async (card, dropData) => {
       if (dropData?.shiftKey) {
         await card.update({ face: null });
@@ -79,7 +89,7 @@ Hooks.once("ready", async () => {
 });
 
 /* ========================================================================== */
-/*  HOOK: SCENE CONTROLS (Formato Objeto Nativo do Foundry VTT v13)           */
+/*  HOOK: SCENE CONTROLS & ABA DE CARTAS                                      */
 /* ========================================================================== */
 Hooks.on("getSceneControlButtons", (controls) => {
   const tokenControls = Array.isArray(controls)
@@ -106,9 +116,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
   }
 });
 
-/* ========================================================================== */
-/*  HOOK: BOTÃO DIRETO NA ABA DE CARTAS (CARDS DIRECTORY V13)                 */
-/* ========================================================================== */
 Hooks.on("renderCardsDirectory", (app, html) => {
   const root = html instanceof HTMLElement ? html : html[0];
   if (!root || root.querySelector(".fvtt-ct-directory-btn")) return;
@@ -128,7 +135,7 @@ Hooks.on("renderCardsDirectory", (app, html) => {
 });
 
 /* ========================================================================== */
-/*  HOOK: DROP DE CARTA DIRETO NO CANVAS (Modo Standalone Tile Card v13)      */
+/*  HOOK: DROP DE CARTA DIRETO NO CANVAS (Modo Standalone Tile Card)          */
 /* ========================================================================== */
 Hooks.on("dropCanvasData", async (canvas, data) => {
   if (game.modules.get("complete-card-management")?.active) return true;

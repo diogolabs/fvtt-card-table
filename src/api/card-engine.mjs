@@ -4,20 +4,79 @@ import { ScryDialogApp } from "../apps/tabletop-app.mjs";
 const SUIT_ORDER = { spades: 1, hearts: 2, clubs: 3, diamonds: 4, joker: 5 };
 
 /**
- * Motor principal de automação de cartas para Foundry VTT v13 (Cockatrice, MTG, Poker e Buraco)
+ * Motor principal de automação de cartas (Cockatrice, MTG, Poker e Buraco)
  */
 export class CardEngine {
   /* ======================================================================== */
-  /*  GERADOR AUTOMÁTICO DE BARALHOS E ZONAS NO MUNDO (1-CLICK SETUP V13)     */
+  /*  GERADOR AUTOMÁTICO DE BARALHOS, MÃOS PRIVADAS E ZONAS DA MESA           */
   /* ======================================================================== */
 
   /**
-   * Cria automaticamente o Baralho completo (52 cartas p/ Poker, 108 p/ Buraco ou Grimório MTG)
-   * mais a Mão do Jogador, a Mesa/Campo de Batalha e o Lixo/Cemitério no mundo atual.
+   * Busca ou cria uma Mão Privada exclusiva para um jogador específico,
+   * garantindo permissão privada e banca inicial de 1.000 fichas.
+   * @param {User} user
+   */
+  static async ensureUserPrivateHand(user = game.user) {
+    let hand = game.cards.find(
+      (c) =>
+        c.type === "hand" &&
+        CardStateManager.getStackState(c).ownerUserId === user.id
+    );
+
+    if (!hand) {
+      hand = game.cards.find(
+        (c) =>
+          c.type === "hand" &&
+          (c.name === `Mão de ${user.name}` ||
+            (!user.isGM && c.ownership?.[user.id] === CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER && c.ownership?.default === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE))
+      );
+    }
+
+    const privateOwnership = {
+      default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE,
+      [user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+    };
+
+    if (!hand) {
+      hand = await Cards.create({
+        name: `Mão de ${user.name}`,
+        type: "hand",
+        img: "icons/sundries/gaming/playing-cards-grey.webp",
+        ownership: privateOwnership,
+        flags: {
+          [MODULE_ID]: {
+            stackState: {
+              zoneType: "hand",
+              ownerUserId: user.id,
+              chips: 1000,
+              roundBet: 0,
+              folded: false
+            }
+          }
+        }
+      });
+    } else if (game.user.isGM) {
+      const currentState = CardStateManager.getStackState(hand);
+      await hand.update({
+        ownership: privateOwnership,
+        [`flags.${MODULE_ID}.stackState.ownerUserId`]: user.id,
+        [`flags.${MODULE_ID}.stackState.chips`]: currentState.chips ?? 1000
+      });
+    }
+
+    return hand;
+  }
+
+  /**
+   * Garante que todas as zonas da mesa existam e tenham permissão compartilhada correta.
    * @param {"mtg"|"poker"|"buraco"} mode
    */
-  static async bootstrapWorldZones(mode = "mtg") {
+  static async bootstrapWorldZones(mode = "poker") {
     const defaultImg = "icons/sundries/gaming/playing-cards-grey.webp";
+    const sharedOwnership = {
+      default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+    };
+
     const suits = [
       { key: "spades", symbol: "♠", label: "Espadas" },
       { key: "hearts", symbol: "♥", label: "Copas" },
@@ -68,106 +127,124 @@ export class CardEngine {
       return list;
     };
 
-    let deckName = "Baralho Principal";
-    let cardsData = [];
+    let deck = game.cards.find(
+      (c) => c.type === "deck" && CardStateManager.getStackState(c).gameMode === mode
+    );
 
-    if (mode === "poker") {
-      deckName = "Baralho de Poker (52 Cartas)";
-      cardsData = buildStandard52(1);
-    } else if (mode === "buraco") {
-      deckName = "Baralho Duplo de Buraco (108 Cartas)";
-      cardsData = [...buildStandard52(1), ...buildStandard52(2)];
-      for (let j = 1; j <= 4; j++) {
-        cardsData.push({
-          name: `Curingão #${j} (Joker)`,
-          type: "base",
-          suit: "joker",
-          value: 0,
-          face: 0,
-          faces: [{ name: `Curingão #${j}`, img: defaultImg, text: "Curinga (20 pts)" }],
-          back: { name: "Verso", img: defaultImg },
-          flags: {
-            [MODULE_ID]: {
-              state: { isWildcard: true, metadata: { pointValue: 20 } }
-            }
-          }
-        });
-      }
-    } else {
-      deckName = "Grimório MTG / Cockatrice";
-      const mtgSamples = [
-        { name: "Island (Ilha)", suit: "lands", cmc: 0, img: "icons/magic/water/wave-water-blue.webp", types: ["Basic Land", "Island"], count: 8 },
-        { name: "Mountain (Montanha)", suit: "lands", cmc: 0, img: "icons/magic/fire/flame-burning-earth-orange.webp", types: ["Basic Land", "Mountain"], count: 8 },
-        { name: "Lightning Bolt", suit: "spells", cmc: 1, img: "icons/magic/lightning/bolt-strike-blue.webp", types: ["Instant"], count: 4 },
-        { name: "Counterspell", suit: "spells", cmc: 2, img: "icons/magic/defensive/shield-barrier-glowing-blue.webp", types: ["Instant"], count: 4 },
-        { name: "Delver of Secrets // Insectile Aberration", suit: "creatures", cmc: 1, img: "icons/magic/control/silhouette-hold-change-blue.webp", types: ["Creature", "Human", "Wizard"], count: 4 },
-        { name: "Shivan Dragon (5/5 Flying)", suit: "creatures", cmc: 6, img: "icons/creatures/reptiles/dragon-horned-flame-red.webp", types: ["Creature", "Dragon"], count: 2 }
-      ];
-      for (const sample of mtgSamples) {
-        for (let i = 0; i < sample.count; i++) {
+    if (!deck) {
+      let deckName = "Baralho Principal";
+      let cardsData = [];
+
+      if (mode === "poker") {
+        deckName = "Baralho de Poker (52 Cartas)";
+        cardsData = buildStandard52(1);
+      } else if (mode === "buraco") {
+        deckName = "Baralho Duplo de Buraco (108 Cartas)";
+        cardsData = [...buildStandard52(1), ...buildStandard52(2)];
+        for (let j = 1; j <= 4; j++) {
           cardsData.push({
-            name: sample.name,
+            name: `Curingão #${j} (Joker)`,
             type: "base",
-            suit: sample.suit,
-            value: sample.cmc,
+            suit: "joker",
+            value: 0,
             face: 0,
-            faces: [{ name: sample.name, img: sample.img, text: sample.types.join(" — ") }],
-            back: { name: "Deckmaster", img: defaultImg },
+            faces: [{ name: `Curingão #${j}`, img: defaultImg, text: "Curinga (20 pts)" }],
+            back: { name: "Verso", img: defaultImg },
             flags: {
               [MODULE_ID]: {
-                state: {
-                  tapped: false,
-                  counters: { plusOne: 0, loyalty: 0, charge: 0, custom: [] },
-                  metadata: { cmc: sample.cmc, cardTypes: sample.types }
-                }
+                state: { isWildcard: true, metadata: { pointValue: 20 } }
               }
             }
           });
         }
+      } else {
+        deckName = "Grimório MTG / Cockatrice";
+        const mtgSamples = [
+          { name: "Island (Ilha)", suit: "lands", cmc: 0, img: "icons/magic/water/wave-water-blue.webp", types: ["Basic Land", "Island"], count: 8 },
+          { name: "Mountain (Montanha)", suit: "lands", cmc: 0, img: "icons/magic/fire/flame-burning-earth-orange.webp", types: ["Basic Land", "Mountain"], count: 8 },
+          { name: "Lightning Bolt", suit: "spells", cmc: 1, img: "icons/magic/lightning/bolt-strike-blue.webp", types: ["Instant"], count: 4 },
+          { name: "Counterspell", suit: "spells", cmc: 2, img: "icons/magic/defensive/shield-barrier-glowing-blue.webp", types: ["Instant"], count: 4 },
+          { name: "Delver of Secrets // Insectile Aberration", suit: "creatures", cmc: 1, img: "icons/magic/control/silhouette-hold-change-blue.webp", types: ["Creature", "Human", "Wizard"], count: 4 },
+          { name: "Shivan Dragon (5/5 Flying)", suit: "creatures", cmc: 6, img: "icons/creatures/reptiles/dragon-horned-flame-red.webp", types: ["Creature", "Dragon"], count: 2 }
+        ];
+        for (const sample of mtgSamples) {
+          for (let i = 0; i < sample.count; i++) {
+            cardsData.push({
+              name: sample.name,
+              type: "base",
+              suit: sample.suit,
+              value: sample.cmc,
+              face: 0,
+              faces: [{ name: sample.name, img: sample.img, text: sample.types.join(" — ") }],
+              back: { name: "Deckmaster", img: defaultImg },
+              flags: {
+                [MODULE_ID]: {
+                  state: {
+                    tapped: false,
+                    counters: { plusOne: 0, loyalty: 0, charge: 0, custom: [] },
+                    metadata: { cmc: sample.cmc, cardTypes: sample.types }
+                  }
+                }
+              }
+            });
+          }
+        }
       }
-    }
 
-    const deck = await Cards.create({
-      name: deckName,
-      type: "deck",
-      img: defaultImg,
-      cards: cardsData,
-      flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "library" } } }
-    });
-
-    await deck.shuffle({ chatNotification: false });
-
-    if (!game.cards.some((c) => c.type === "hand" && c.testUserPermission(game.user, "OWNER"))) {
-      await Cards.create({
-        name: `Mão de ${game.user.name}`,
-        type: "hand",
+      deck = await Cards.create({
+        name: deckName,
+        type: "deck",
         img: defaultImg,
-        flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "hand" } } }
+        ownership: sharedOwnership,
+        cards: cardsData,
+        flags: { [MODULE_ID]: { stackState: { gameMode: mode, zoneType: "library" } } }
       });
+      await deck.shuffle({ chatNotification: false });
+    } else if (game.user.isGM) {
+      await deck.update({ ownership: sharedOwnership });
     }
 
-    if (!game.cards.some((c) => c.type === "pile" && ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(c).zoneType))) {
-      await Cards.create({
-        name: mode === "poker" ? "Mesa Comunitária (Flop/Turn/River)" : mode === "buraco" ? "Jogos Baixados / Canastras" : "Campo de Batalha (TableZone)",
+    const targetUsers = game.user.isGM ? game.users.contents : [game.user];
+    for (const u of targetUsers) {
+      await this.ensureUserPrivateHand(u);
+    }
+
+    let battlefieldPile = game.cards.find(
+      (c) => c.type === "pile" && ["battlefield", "community", "meld"].includes(CardStateManager.getStackState(c).zoneType)
+    );
+    if (!battlefieldPile) {
+      battlefieldPile = await Cards.create({
+        name: mode === "poker" ? "Mesa Comunitária (Crupiê)" : mode === "buraco" ? "Jogos Baixados / Canastras" : "Campo de Batalha (TableZone)",
         type: "pile",
         img: defaultImg,
+        ownership: sharedOwnership,
         flags: {
           [MODULE_ID]: {
             stackState: {
               gameMode: mode,
               zoneType: mode === "poker" ? "community" : mode === "buraco" ? "meld" : "battlefield",
-              pot: 0
+              pot: 0,
+              currentBet: 0
             }
           }
         }
       });
+    } else if (game.user.isGM) {
+      await battlefieldPile.update({ ownership: sharedOwnership });
     }
 
-    if (!game.cards.some((c) => c.type === "pile" && ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType))) {
-      await Cards.create({
-        name: mode === "poker" ? "Queima / Descarte (Burn)" : mode === "buraco" ? "Lixo" : "Cemitério (Graveyard)",
+    let discardPile = game.cards.find(
+      (c) =>
+        c.type === "pile" &&
+        c.id !== battlefieldPile.id &&
+        ["graveyard", "lixo", "burn"].includes(CardStateManager.getStackState(c).zoneType)
+    );
+    if (!discardPile) {
+      discardPile = await Cards.create({
+        name: mode === "poker" ? "Queima / Descarte (Muck)" : mode === "buraco" ? "Lixo" : "Cemitério (Graveyard)",
         type: "pile",
         img: defaultImg,
+        ownership: sharedOwnership,
         flags: {
           [MODULE_ID]: {
             stackState: {
@@ -177,6 +254,8 @@ export class CardEngine {
           }
         }
       });
+    } else if (game.user.isGM) {
+      await discardPile.update({ ownership: sharedOwnership });
     }
 
     if (mode === "buraco" && !game.cards.some((c) => c.type === "pile" && CardStateManager.getStackState(c).zoneType === "morto")) {
@@ -184,12 +263,13 @@ export class CardEngine {
         name: "Morto (11 Cartas)",
         type: "pile",
         img: defaultImg,
+        ownership: sharedOwnership,
         flags: { [MODULE_ID]: { stackState: { gameMode: "buraco", zoneType: "morto" } } }
       });
     }
 
-    ui.notifications.info(`Baralho "${deckName}" (${cardsData.length} cartas) e zonas de jogo criados com sucesso!`);
-    return deck;
+    ui.notifications.info(`Mesa de ${mode.toUpperCase()} pronta! Mãos privadas e bancas de fichas configuradas.`);
+    return { deck, battlefieldPile, discardPile };
   }
 
   /* ======================================================================== */
@@ -232,7 +312,7 @@ export class CardEngine {
     const pack = game.packs.get(`${MODULE_ID}.decks`);
     if (!pack) return 0;
 
-    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "13.0.0";
+    const moduleVersion = game.modules.get(MODULE_ID)?.version ?? "1.0.3";
     const packDocs = await pack.getDocuments();
     let updatedCount = 0;
 
@@ -419,23 +499,61 @@ export class CardEngine {
   };
 
   /* ======================================================================== */
-  /*  MECÂNICAS DE POKER (TEXAS HOLD'EM / OMAHA)                              */
+  /*  MECÂNICAS DE POKER, FICHAS, POTE & CRUPIÊ (TEXAS HOLD'EM / OMAHA)       */
   /* ======================================================================== */
 
   static poker = {
-    async startRound(deck, playerHands = [], holeCardCount = 2) {
+    /**
+     * Crupiê: Inicia uma nova mão de Texas Hold'em
+     */
+    async startRound(deck, playerHands = [], communityPile = null, holeCardCount = 2) {
       await deck.recall({ chatNotification: false });
-      await deck.shuffle({ chatNotification: true });
+      await deck.shuffle({ chatNotification: false });
+
+      for (const hand of playerHands) {
+        await CardStateManager.updateStackState(hand, {
+          roundBet: 0,
+          folded: false
+        });
+      }
+
+      if (communityPile) {
+        await CardStateManager.updateStackState(communityPile, {
+          currentBet: 0
+        });
+      }
+
       if (playerHands.length > 0) {
         await deck.deal(playerHands, holeCardCount, {
           how: CONST.CARD_DRAW_MODES.TOP,
-          chatNotification: true
+          chatNotification: false
         });
       }
+
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (Texas Hold'em):</strong> Nova mão iniciada! Baralho embaralhado e ${holeCardCount} cartas privadas distribuídas para ${playerHands.length} jogador(es). Apostas da rodada zeradas!</div>`
+      });
     },
 
-    async dealCommunity(deck, burnPile, communityPile, stage = "flop") {
-      if (burnPile && deck.availableCards.length > 0) {
+    /**
+     * Crupiê: Queima 1 carta e abre Flop (3), Turn (1) ou River (1), zerando a aposta da rodada anterior
+     */
+    async dealCommunity(deck, burnPile, communityPile, stage = "flop", playerHands = []) {
+      const existingCommunity = communityPile.cards.filter(
+        (c) => CardStateManager.getCardState(c).boardRole !== "showdown"
+      );
+
+      if (stage === "auto") {
+        if (existingCommunity.length === 0) stage = "flop";
+        else if (existingCommunity.length < 4) stage = "turn";
+        else if (existingCommunity.length === 4) stage = "river";
+        else {
+          ui.notifications.info("As 5 cartas comunitárias (Flop, Turn e River) já estão abertas na mesa!");
+          return [];
+        }
+      }
+
+      if (burnPile && burnPile.id !== communityPile.id && deck.availableCards.length > 0) {
         await burnPile.draw(deck, 1, {
           how: CONST.CARD_DRAW_MODES.TOP,
           updateData: { face: null },
@@ -444,29 +562,206 @@ export class CardEngine {
       }
 
       const count = stage === "flop" ? 3 : 1;
+      const startSlot = existingCommunity.length + 1;
       const drawn = await communityPile.draw(deck, count, {
         how: CONST.CARD_DRAW_MODES.TOP,
-        updateData: { face: 0 },
-        chatNotification: true
+        updateData: {
+          face: 0,
+          [`flags.${MODULE_ID}.state.boardRole`]: "community"
+        },
+        chatNotification: false
       });
 
+      const slotUpdates = drawn.map((c, idx) => ({
+        _id: c.id,
+        [`flags.${MODULE_ID}.state.boardRole`]: "community",
+        [`flags.${MODULE_ID}.state.communitySlot`]: startSlot + idx
+      }));
+      if (slotUpdates.length) {
+        await communityPile.updateEmbeddedDocuments("Card", slotUpdates);
+      }
+
+      // Nova street (Flop/Turn/River) zera a aposta da rodada atual mantendo o Pote acumulado
+      await CardStateManager.updateStackState(communityPile, { currentBet: 0 });
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, { roundBet: 0 });
+      }
+
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>Poker (${stage.toUpperCase()}):</strong> ${drawn.map((c) => `[${c.name}]`).join(" ")}</div>`
+        content: `<div class="fvtt-card-table-chat"><strong>🎩 Crupiê (${stage.toUpperCase()}):</strong> Queimou 1 carta e abriu ${drawn.map((c) => `<strong>[${c.name}]</strong>`).join(" ")} na mesa comunitária!</div>`
       });
       return drawn;
     },
 
-    async bet(communityPile, amount, playerName = game.user.name) {
-      const state = CardStateManager.getStackState(communityPile);
-      const nextPot = (state.pot ?? 0) + Number(amount);
+    /**
+     * Jogador aposta fichas da própria banca (Stack) para o Pote da mesa
+     */
+    async bet(communityPile, playerHand, amount, { isCall = false, isAllIn = false, playerName = game.user.name } = {}) {
+      const requested = Math.max(0, Math.floor(Number(amount) || 0));
+      if (requested <= 0) return;
+
+      const tableState = CardStateManager.getStackState(communityPile);
+      let actualBet = requested;
+      let remainingChips = null;
+      let nextPlayerRoundBet = requested;
+
+      if (playerHand) {
+        const handState = CardStateManager.getStackState(playerHand);
+        const currentChips = handState.chips ?? 1000;
+        if (currentChips <= 0) {
+          ui.notifications.warn("Você não possui fichas suficientes na sua banca!");
+          return;
+        }
+        actualBet = Math.min(requested, currentChips);
+        remainingChips = currentChips - actualBet;
+        nextPlayerRoundBet = (handState.roundBet ?? 0) + actualBet;
+
+        await CardStateManager.updateStackState(playerHand, {
+          chips: remainingChips,
+          roundBet: nextPlayerRoundBet
+        });
+      }
+
+      const nextPot = (tableState.pot ?? 0) + actualBet;
+      const nextCurrentBet = Math.max(tableState.currentBet ?? 0, nextPlayerRoundBet);
+
       await CardStateManager.updateStackState(communityPile, {
         pot: nextPot,
-        currentBet: Number(amount)
+        currentBet: nextCurrentBet
       });
+
+      const actionTag =
+        isAllIn || remainingChips === 0
+          ? "🔥 deu ALL-IN de"
+          : isCall
+            ? "pagou (Call)"
+            : "apostou";
+
       await ChatMessage.create({
-        content: `<div class="fvtt-card-table-chat"><strong>${playerName}</strong> apostou <strong>${amount} fichas</strong>. Pote Total: <strong>${nextPot}</strong>.</div>`
+        content: `<div class="fvtt-card-table-chat">🪙 <strong>${playerName}</strong> ${actionTag} <strong>${actualBet} fichas</strong> (Na rodada: ${nextPlayerRoundBet} | Restante: ${remainingChips ?? "—"}).<br/>💰 <strong>Pote Total: ${nextPot} fichas</strong> (Aposta a pagar: ${nextCurrentBet}).</div>`
       });
       return nextPot;
+    },
+
+    /**
+     * Jogador dá Check (se já igualou a aposta da rodada) ou Call (paga a diferença exata)
+     */
+    async checkOrCall(communityPile, playerHand, playerName = game.user.name) {
+      if (!communityPile || !playerHand) return;
+      const tableState = CardStateManager.getStackState(communityPile);
+      const handState = CardStateManager.getStackState(playerHand);
+      const toCall = Math.max(0, (tableState.currentBet ?? 0) - (handState.roundBet ?? 0));
+
+      if (toCall === 0) {
+        await ChatMessage.create({
+          content: `<div class="fvtt-card-table-chat">✊ <strong>${playerName}</strong> deu <strong>Check (Mesa)</strong>.</div>`
+        });
+        return 0;
+      }
+      return this.bet(communityPile, playerHand, toCall, { isCall: true, playerName });
+    },
+
+    /**
+     * Jogador aposta todas as fichas restantes (All-In)
+     */
+    async allIn(communityPile, playerHand, playerName = game.user.name) {
+      if (!communityPile || !playerHand) return;
+      const handState = CardStateManager.getStackState(playerHand);
+      const allChips = handState.chips ?? 0;
+      if (allChips <= 0) {
+        ui.notifications.warn("Você não tem fichas para dar All-In!");
+        return;
+      }
+      return this.bet(communityPile, playerHand, allChips, { isAllIn: true, playerName });
+    },
+
+    /**
+     * Jogador desiste da mão (Fold): envia todas as cartas da mão viradas para baixo para o Muck/Descarte
+     */
+    async fold(playerHand, discardPile, playerName = game.user.name) {
+      if (!playerHand) return;
+      const cardIds = playerHand.cards.map((c) => c.id);
+      if (cardIds.length > 0 && discardPile) {
+        await playerHand.pass(discardPile, cardIds, {
+          updateData: { face: null },
+          chatNotification: false
+        });
+      }
+      await CardStateManager.updateStackState(playerHand, { folded: true });
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🏳️ <strong>${playerName}</strong> desistiu da mão (<strong>Fold</strong>).</div>`
+      });
+    },
+
+    /**
+     * Zera o Pote e as apostas da rodada atual
+     */
+    async resetPot(communityPile, playerHands = []) {
+      if (!communityPile) return;
+      await CardStateManager.updateStackState(communityPile, {
+        pot: 0,
+        currentBet: 0
+      });
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, { roundBet: 0 });
+      }
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🧹 <strong>Pote da mesa zerado pelo Crupiê.</strong></div>`
+      });
+    },
+
+    /**
+     * Transfere todas as fichas do Pote para a banca do jogador vencedor e zera o Pote
+     */
+    async awardPot(communityPile, winnerHand, allPlayerHands = []) {
+      if (!communityPile || !winnerHand) return;
+      const tableState = CardStateManager.getStackState(communityPile);
+      const potAmount = tableState.pot ?? 0;
+      if (potAmount <= 0) {
+        ui.notifications.warn("O Pote está vazio (0 fichas).");
+        return;
+      }
+
+      const winnerState = CardStateManager.getStackState(winnerHand);
+      const newChips = (winnerState.chips ?? 0) + potAmount;
+
+      await CardStateManager.updateStackState(winnerHand, {
+        chips: newChips,
+        roundBet: 0
+      });
+
+      await CardStateManager.updateStackState(communityPile, {
+        pot: 0,
+        currentBet: 0
+      });
+
+      for (const h of allPlayerHands) {
+        if (h.id !== winnerHand.id) {
+          await CardStateManager.updateStackState(h, { roundBet: 0 });
+        }
+      }
+
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🏆 <strong>${winnerHand.name}</strong> venceu o Pote de <strong>${potAmount} fichas</strong>! (Nova banca: <strong>${newChips} fichas</strong>).</div>`
+      });
+      return newChips;
+    },
+
+    /**
+     * Define ou reseta a banca de fichas (Buy-in / Rebuy) para todas as mãos de jogadores
+     */
+    async buyInAll(playerHands = [], amount = 1000) {
+      const chips = Math.max(0, Math.floor(Number(amount) || 1000));
+      for (const h of playerHands) {
+        await CardStateManager.updateStackState(h, {
+          chips,
+          roundBet: 0,
+          folded: false
+        });
+      }
+      await ChatMessage.create({
+        content: `<div class="fvtt-card-table-chat">🪙 <strong>Buy-in realizado:</strong> Todos os jogadores agora possuem <strong>${chips} fichas</strong> na banca!</div>`
+      });
     }
   };
 
