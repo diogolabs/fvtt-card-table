@@ -504,3 +504,175 @@
   flex-direction: column;
   gap: 4px;
 }
+
+/* ========================================================================== */
+/*  MODO SOLO VS. CRUPIÊ (POTE ISOLADO DA MESA MULTIPLAYER)                   */
+/* ========================================================================== */
+
+.fvtt-ct-zone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fvtt-ct-zone-header h3 {
+  margin: 0;
+}
+
+.fvtt-ct-submode-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-solo-arena {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fvtt-ct-solo-controls-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 6px;
+}
+
+.fvtt-ct-solo-start-group,
+.fvtt-ct-solo-step-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fvtt-ct-solo-result-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.fvtt-ct-solo-result-banner.win {
+  background: rgba(21, 128, 61, 0.45);
+  border-color: #4ade80;
+}
+
+.fvtt-ct-solo-result-banner.lose {
+  background: rgba(127, 29, 29, 0.45);
+  border-color: #f87171;
+}
+
+.fvtt-ct-solo-result-banner.tie {
+  background: rgba(161, 98, 7, 0.45);
+  border-color: #facc15;
+}
+
+.fvtt-ct-solo-result-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fde047;
+}
+
+.fvtt-ct-solo-result-desc {
+  font-size: 12px;
+  color: #f0f0f0;
+}
+
+.fvtt-ct-solo-result-hands {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-solo-duel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.fvtt-ct-solo-side-box {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.fvtt-ct-solo-side-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fvtt-ct-solo-card-face {
+  width: 100%;
+  height: 118px;
+  background: linear-gradient(145deg, #ffffff 0%, #e2e8f0 100%);
+  color: #111827;
+  border-radius: 5px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.fvtt-ct-solo-card-face.is-red {
+  color: #dc2626;
+}
+
+.fvtt-ct-solo-corner {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fvtt-ct-solo-big-suit {
+  font-size: 46px;
+  line-height: 1;
+  text-align: center;
+  margin: auto 0;
+}
+
+.fvtt-ct-solo-card-back {
+  width: 100%;
+  height: 118px;
+  background: repeating-linear-gradient(
+    45deg,
+    #1e293b,
+    #1e293b 8px,
+    #0f172a 8px,
+    #0f172a 16px
+  );
+  border: 2px solid #d4af37;
+  border-radius: 5px;
+  color: #f3c86b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.fvtt-ct-solo-card-back i {
+  font-size: 28px;
+}

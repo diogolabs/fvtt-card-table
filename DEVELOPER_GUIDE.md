@@ -75,6 +75,17 @@ Para suportar simultaneamente o **Foundry VTT 14** e o **Foundry VTT 13** no mes
   * Botão **`🏆 Dar Pote`** ao lado de cada jogador (transfere todo o `pot` da mesa para o `chips` do vencedor e zera o pote).
   * Botão **`🧹 Zerar Pote`** e botão **`🪙 Buy-in (1.000)`** para resetar/abastecer as bancas.
 
+### `v1.0.4` — Modo Solo vs. Crupiê (Pote Isolado) & Avaliador Automático de Mãos
+* **Controle de Permissão pelo GM (`allowSoloPoker`):**
+  * Nova configuração de mundo (`scope: "world"`, padrão `false`) e botão rápido na barra do GM (`🔒 Solo vs. Crupiê: Bloqueado` / `🔓 Solo vs. Crupiê: Liberado`).
+  * Jogadores comuns só visualizam a aba **Solo vs. Crupiê** quando o GM libera o recurso.
+* **Isolamento Completo da Mesa Multiplayer (`stackState.soloGame`):**
+  * Todo o estado da partida contra a Banca (`pot`, `stage`, `deck`, `playerCards`, `dealerCards`, `communityCards`, `lastResult`) fica salvo nas flags da `playerHand` do jogador, não interferindo em nada no Pote, nas apostas ou nas cartas comunitárias da mesa Multiplayer.
+* **Fluxo Completo Etapa a Etapa (Pré-Flop → Flop → Turn → River → Showdown):**
+  * O jogador inicia a mão com Ante (`10`, `25` ou `50`), a Banca casa o valor no Pote Solo, e a cada street o jogador pode dar Check/Avançar, Apostar (`+10`, `+25`, `+50`), ir All-In até o Showdown ou Desistir (Fold).
+* **Avaliador Oficial de 7 Cartas (`evaluateBestHand` & `compareEvaluations`):**
+  * Analisa todas as 21 combinações de 5 cartas dentre as 7 disponíveis (`2 da mão + 5 da mesa`), classificando *Royal Flush, Straight Flush, Quadra, Full House, Flush, Sequência (incluindo A-2-3-4-5), Trinca, Dois Pares, Par e Carta Alta* com desempate automático por *Kickers* e pagamento instantâneo do Pote Solo.
+
 ---
 
 ## 4. Mapa de Arquivos do Projeto

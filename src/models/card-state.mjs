@@ -37,13 +37,25 @@ export const DEFAULT_STACK_STATE = {
   zoneType: "deck",           // "library" | "hand" | "battlefield" | "graveyard" | "exile" | "command" | "lixo" | "morto" | "meld" | "community" | "burn"
   ownerUserId: null,          // ID do usuário dono exclusivo desta Mão Privada
   chips: 1000,                // Saldo de fichas do jogador dono desta mão (Poker)
-  roundBet: 0,                // Valor já apostado pelo jogador na rodada atual (Poker)
-  folded: false,              // Se o jogador desistiu (Fold) na mão atual (Poker)
-  pot: 0,                     // Pote acumulado na mesa (Poker)
-  currentBet: 0,              // Maior aposta atual da rodada na mesa (Poker)
+  roundBet: 0,                // Valor já apostado pelo jogador na rodada atual (Poker Multiplayer)
+  folded: false,              // Se o jogador desistiu (Fold) na mão atual (Poker Multiplayer)
+  pot: 0,                     // Pote acumulado na mesa principal (Poker Multiplayer)
+  currentBet: 0,              // Maior aposta atual da rodada na mesa principal (Poker Multiplayer)
+  soloGame: {                 // Estado isolado do modo Solo vs. Crupiê (não afeta o Pote Multiplayer)
+    active: false,
+    stage: "idle",            // "idle" | "preflop" | "flop" | "turn" | "river" | "showdown"
+    pot: 0,                   // Pote exclusivo da partida Solo contra a Banca
+    playerInvested: 0,        // Total de fichas colocadas pelo jogador na mão solo
+    burnedCount: 0,           // Quantas cartas o Crupiê queimou na mão solo
+    deck: [],                 // Baralho virtual de 52 cartas isolado para a mão solo
+    playerCards: [],          // 2 Hole Cards do jogador no modo solo
+    dealerCards: [],          // 2 cartas do Crupiê (ocultas até o Showdown)
+    communityCards: [],       // Até 5 cartas comunitárias (Flop 1-3, Turn, River)
+    lastResult: null          // Resultado detalhado do Showdown Solo
+  },
   teamId: null,               // Dupla dona da zona de jogos baixados (Buraco)
   sourceCompendiumUuid: null, // UUID do Compêndio de origem para sincronização de versão
-  sourceVersion: "1.0.3"
+  sourceVersion: "1.0.4"
 };
 
 /**

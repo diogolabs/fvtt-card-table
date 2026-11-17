@@ -11,6 +11,7 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
   constructor(options = {}) {
     super(options);
     this.selectedCardIds = new Set();
+    this.soloViewActive = false;
   }
 
   get activeGameMode() {
@@ -59,6 +60,11 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
       pokerResetPot: TabletopBoardApp.#onPokerResetPot,
       pokerAwardPot: TabletopBoardApp.#onPokerAwardPot,
       pokerBuyInAll: TabletopBoardApp.#onPokerBuyInAll,
+      toggleAllowSoloPoker: TabletopBoardApp.#onToggleAllowSoloPoker,
+      switchPokerSubMode: TabletopBoardApp.#onSwitchPokerSubMode,
+      soloStartHand: TabletopBoardApp.#onSoloStartHand,
+      soloStep: TabletopBoardApp.#onSoloStep,
+      soloFold: TabletopBoardApp.#onSoloFold,
       buracoSetup: TabletopBoardApp.#onBuracoSetup,
       buracoBuyTrash: TabletopBoardApp.#onBuracoBuyTrash,
       buracoPlayMeld: TabletopBoardApp.#onBuracoPlayMeld
@@ -223,6 +229,68 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     }));
 
     context.showdownCards = showdownCards;
+
+    // Configuração do Modo Solo vs. Crupiê (controlado pelo GM e 100% isolado do Pote Multiplayer)
+    context.allowSoloPoker = game.settings.get(MODULE_ID, "allowSoloPoker") ?? false;
+    context.canSeeSoloPoker = context.isGM || context.allowSoloPoker;
+    if (!context.canSeeSoloPoker) {
+      this.soloViewActive = false;
+    }
+    context.isSoloPokerView = context.isPoker && context.canSeeSoloPoker && this.soloViewActive;
+
+    const soloRaw = handStackState.soloGame ?? {};
+    const soloStage = soloRaw.stage || "idle";
+    const soloCommunity = soloRaw.communityCards ?? [];
+    const soloPlayerCards = soloRaw.playerCards ?? [];
+    const soloDealerCards = soloRaw.dealerCards ?? [];
+
+    const nextStageMap = {
+      preflop: "Abrir Flop (3)",
+      flop: "Abrir Turn (1)",
+      turn: "Abrir River (1)",
+      river: "Ver Showdown"
+    };
+
+    context.solo = {
+      active: Boolean(soloRaw.active),
+      stage: soloStage,
+      stageLabel:
+        soloStage === "preflop"
+          ? "Pré-Flop"
+          : soloStage === "flop"
+            ? "Flop"
+            : soloStage === "turn"
+              ? "Turn"
+              : soloStage === "river"
+                ? "River"
+                : soloStage === "showdown"
+                  ? "Showdown Finalizado"
+                  : "Aguardando Início",
+      isInProgress: ["preflop", "flop", "turn", "river"].includes(soloStage),
+      isShowdown: soloStage === "showdown",
+      nextStageLabel: nextStageMap[soloStage] ?? "Avançar",
+      pot: soloRaw.pot ?? 0,
+      playerInvested: soloRaw.playerInvested ?? 0,
+      burnedCount: soloRaw.burnedCount ?? 0,
+      playerCards: soloPlayerCards,
+      dealerCards: soloDealerCards,
+      playerLiveEval:
+        soloPlayerCards.length > 0
+          ? CardEngine.poker.evaluateBestHand([...soloPlayerCards, ...soloCommunity]).name
+          : "",
+      dealerSlots: slotLabels.map((s, idx) => ({
+        slot: s.slot,
+        label: s.stage,
+        card: soloCommunity[idx] ?? null
+      })),
+      lastResult: soloRaw.lastResult
+        ? {
+            ...soloRaw.lastResult,
+            isWin: soloRaw.lastResult.outcome === "win",
+            isTie: soloRaw.lastResult.outcome === "tie"
+          }
+        : null
+    };
 
     context.battlefield = zones.battlefieldPile
       ? {
@@ -534,6 +602,52 @@ export class TabletopBoardApp extends HandlebarsApplicationMixin(ApplicationV2) 
     const { allHands } = this._resolveZones();
     const amount = Number(target.dataset.amount ?? 1000);
     await CardEngine.poker.buyInAll(allHands, amount);
+    await this.render();
+  }
+
+  static async #onToggleAllowSoloPoker() {
+    if (!game.user.isGM) return;
+    const current = game.settings.get(MODULE_ID, "allowSoloPoker") ?? false;
+    const next = !current;
+    await game.settings.set(MODULE_ID, "allowSoloPoker", next);
+    ui.notifications.info(
+      next
+        ? "Modo Solo vs. Crupiê LIBERADO para os jogadores!"
+        : "Modo Solo vs. Crupiê OCULTADO para os jogadores."
+    );
+    await this.render();
+  }
+
+  static async #onSwitchPokerSubMode(event, target) {
+    const submode = target.dataset.submode;
+    this.soloViewActive = submode === "solo";
+    await this.render();
+  }
+
+  static async #onSoloStartHand(event, target) {
+    let { playerHand } = this._resolveZones();
+    if (!playerHand) playerHand = await CardEngine.ensureUserPrivateHand(game.user);
+    const ante = Number(target.dataset.ante ?? 10);
+    this.soloViewActive = true;
+    await CardEngine.poker.startSoloHand(playerHand, ante);
+    await this.render();
+  }
+
+  static async #onSoloStep(event, target) {
+    let { playerHand } = this._resolveZones();
+    if (!playerHand) return;
+    const bet = Number(target.dataset.bet ?? 0);
+    const runToShowdown = target.dataset.allin === "true";
+    const handState = CardStateManager.getStackState(playerHand);
+    const actualBet = runToShowdown ? (handState.chips ?? 0) : bet;
+    await CardEngine.poker.advanceSoloHand(playerHand, actualBet, { runToShowdown });
+    await this.render();
+  }
+
+  static async #onSoloFold() {
+    let { playerHand } = this._resolveZones();
+    if (!playerHand) return;
+    await CardEngine.poker.foldSoloHand(playerHand);
     await this.render();
   }
 

@@ -40,6 +40,18 @@
           <button type="button" class="fvtt-ct-btn" data-action="pokerBuyInAll" data-amount="1000" title="Define 1.000 fichas para todos os jogadores">
             <i class="fa-solid fa-coins"></i> Buy-in (1.000)
           </button>
+          <button
+            type="button"
+            class="fvtt-ct-btn {{#if allowSoloPoker}}active{{else}}danger{{/if}}"
+            data-action="toggleAllowSoloPoker"
+            title="Libera ou bloqueia o modo Solo vs. Crupiê para os jogadores (Pote 100% isolado da mesa multiplayer)"
+          >
+            {{#if allowSoloPoker}}
+              <i class="fa-solid fa-lock-open"></i> Solo vs. Crupiê: Liberado
+            {{else}}
+              <i class="fa-solid fa-lock"></i> Solo vs. Crupiê: Bloqueado
+            {{/if}}
+          </button>
         {{/if}}
       {{/if}}
 
@@ -151,9 +163,14 @@
       <div class="fvtt-ct-zone-header">
         <h3>
           {{#if isPoker}}
-            🎩 Mesa Texas Hold'em — Pote Total: <span class="fvtt-ct-badge-gold">💰 {{battlefield.pot}} fichas</span>
-            {{#if battlefield.currentBet}}
-              <span class="fvtt-ct-current-bet-badge">Aposta Atual: {{battlefield.currentBet}} fichas</span>
+            {{#if isSoloPokerView}}
+              🤖 Modo Solo vs. Crupiê — Pote Solo Isolado: <span class="fvtt-ct-badge-gold">💰 {{solo.pot}} fichas</span>
+              <span class="fvtt-ct-current-bet-badge">Etapa: {{solo.stageLabel}}</span>
+            {{else}}
+              🎩 Mesa Texas Hold'em — Pote Total: <span class="fvtt-ct-badge-gold">💰 {{battlefield.pot}} fichas</span>
+              {{#if battlefield.currentBet}}
+                <span class="fvtt-ct-current-bet-badge">Aposta Atual: {{battlefield.currentBet}} fichas</span>
+              {{/if}}
             {{/if}}
           {{else if isBuraco}}
             Jogos Baixados / Canastras — Pontos: <span class="fvtt-ct-badge-gold">{{battlefield.buracoScore.total}} pts</span>
@@ -161,57 +178,208 @@
             Campo de Batalha (TableZone)
           {{/if}}
         </h3>
+
+        {{#if isPoker}}
+          {{#if canSeeSoloPoker}}
+            <div class="fvtt-ct-submode-tabs">
+              <button
+                type="button"
+                class="fvtt-ct-btn {{#unless isSoloPokerView}}active{{/unless}}"
+                data-action="switchPokerSubMode"
+                data-submode="multi"
+              >
+                <i class="fa-solid fa-users"></i> Mesa Multiplayer (Pote: {{battlefield.pot}})
+              </button>
+              <button
+                type="button"
+                class="fvtt-ct-btn {{#if isSoloPokerView}}active{{/if}}"
+                data-action="switchPokerSubMode"
+                data-submode="solo"
+              >
+                <i class="fa-solid fa-robot"></i> Solo vs. Crupiê (Pote Solo: {{solo.pot}})
+              </button>
+            </div>
+          {{/if}}
+        {{/if}}
       </div>
 
       {{#if isPoker}}
-        <!-- 5 SLOTS OFICIAIS DO CRUPIÊ (FLOP 1, FLOP 2, FLOP 3, TURN, RIVER) -->
-        <div class="fvtt-ct-dealer-board">
-          {{#each dealerSlots as |slot|}}
-            <div class="fvtt-ct-dealer-slot {{#if slot.card}}filled{{/if}}">
-              <div class="fvtt-ct-slot-label">{{slot.label}}</div>
-              {{#if slot.card}}
-                <div class="fvtt-ct-card" data-card-id="{{slot.card.id}}" data-zone="battlefield">
-                  <div class="fvtt-ct-card-image-wrap">
-                    <img src="{{slot.card.img}}" alt="{{slot.card.name}}" />
-                  </div>
-                  <div class="fvtt-ct-card-title">{{slot.card.name}}</div>
-                </div>
-              {{else}}
-                <div class="fvtt-ct-slot-placeholder">
-                  <span>Aguardando Crupiê</span>
+        {{#if isSoloPokerView}}
+          <!-- ================================================================= -->
+          <!-- MESA SOLO VS. CRUPIÊ (POTE ISOLADO — NÃO AFETA A MESA PRINCIPAL)  -->
+          <!-- ================================================================= -->
+          <div class="fvtt-ct-solo-arena">
+            <div class="fvtt-ct-solo-controls-bar">
+              <div class="fvtt-ct-solo-start-group">
+                <button type="button" class="fvtt-ct-btn primary" data-action="soloStartHand" data-ante="10">
+                  <i class="fa-solid fa-play"></i> Nova Mão Solo (Ante 10)
+                </button>
+                <button type="button" class="fvtt-ct-btn" data-action="soloStartHand" data-ante="25">
+                  Ante 25
+                </button>
+                <button type="button" class="fvtt-ct-btn" data-action="soloStartHand" data-ante="50">
+                  Ante 50
+                </button>
+              </div>
+
+              {{#if solo.isInProgress}}
+                <div class="fvtt-ct-solo-step-group">
+                  <button type="button" class="fvtt-ct-btn primary" data-action="soloStep" data-bet="0">
+                    ✊ Check / {{solo.nextStageLabel}}
+                  </button>
+                  <button type="button" class="fvtt-ct-chip-btn chip-10" data-action="soloStep" data-bet="10" title="Apostar +10 (Crupiê cobre +10) e {{solo.nextStageLabel}}">
+                    +10
+                  </button>
+                  <button type="button" class="fvtt-ct-chip-btn chip-25" data-action="soloStep" data-bet="25" title="Apostar +25 (Crupiê cobre +25) e {{solo.nextStageLabel}}">
+                    +25
+                  </button>
+                  <button type="button" class="fvtt-ct-chip-btn chip-50" data-action="soloStep" data-bet="50" title="Apostar +50 (Crupiê cobre +50) e {{solo.nextStageLabel}}">
+                    +50
+                  </button>
+                  <button type="button" class="fvtt-ct-btn allin-btn" data-action="soloStep" data-allin="true" title="Apostar todas as fichas e abrir todas as cartas até o Showdown">
+                    🔥 All-In Showdown
+                  </button>
+                  <button type="button" class="fvtt-ct-btn danger" data-action="soloFold">
+                    🏳️ Desistir
+                  </button>
                 </div>
               {{/if}}
             </div>
-          {{/each}}
-        </div>
 
-        <!-- ÁREA DE SHOWDOWN (CARTAS BAIXADAS DA MÃO PELOS JOGADORES) -->
-        <div class="fvtt-ct-showdown-section">
-          <h4><i class="fa-solid fa-eye"></i> Showdown — Cartas Reveladas pelos Jogadores</h4>
-          <div class="fvtt-ct-card-grid">
-            {{#each showdownCards as |card|}}
-              <div class="fvtt-ct-card" data-card-id="{{card.id}}" data-zone="battlefield">
-                <div class="fvtt-ct-card-image-wrap">
-                  <img src="{{card.img}}" alt="{{card.name}}" />
-                  {{#if card.playedBy}}
-                    <span class="fvtt-ct-meld-tag">{{card.playedBy}}</span>
-                  {{/if}}
-                </div>
-                <div class="fvtt-ct-card-title">{{#if card.isFaceDown}}Carta Oculta{{else}}{{card.name}}{{/if}}</div>
-                <div class="fvtt-ct-card-actions">
-                  <button type="button" data-action="flipCard" title="Virar Face/Verso">
-                    <i class="fa-solid fa-repeat"></i>
-                  </button>
-                  <button type="button" data-action="discardCard" title="Enviar para Muck / Descarte">
-                    <i class="fa-solid fa-trash"></i>
-                  </button>
+            {{#if solo.lastResult}}
+              <div class="fvtt-ct-solo-result-banner {{#if solo.lastResult.isWin}}win{{else if solo.lastResult.isTie}}tie{{else}}lose{{/if}}">
+                <div class="fvtt-ct-solo-result-title">{{solo.lastResult.title}}</div>
+                <div class="fvtt-ct-solo-result-desc">{{solo.lastResult.summary}}</div>
+                <div class="fvtt-ct-solo-result-hands">
+                  <span><strong>Seu Jogo:</strong> {{solo.lastResult.playerHandName}}</span>
+                  <span>•</span>
+                  <span><strong>Jogo do Crupiê:</strong> {{solo.lastResult.dealerHandName}}</span>
                 </div>
               </div>
-            {{else}}
-              <p class="fvtt-ct-empty">Nenhuma carta de jogador revelada ainda (clique em "Jogar" na sua mão na hora do Showdown).</p>
+            {{/if}}
+
+            <!-- MÃO DO CRUPIÊ E MÃO DO JOGADOR LADO A LADO -->
+            <div class="fvtt-ct-solo-duel-row">
+              <div class="fvtt-ct-solo-side-box">
+                <h4>🎩 Mão do Crupiê (Banca)</h4>
+                <div class="fvtt-ct-card-grid">
+                  {{#each solo.dealerCards as |card|}}
+                    <div class="fvtt-ct-card">
+                      {{#if ../solo.isShowdown}}
+                        <div class="fvtt-ct-solo-card-face {{#if card.isRed}}is-red{{/if}}">
+                          <span class="fvtt-ct-solo-corner">{{card.shortLabel}}</span>
+                          <span class="fvtt-ct-solo-big-suit">{{card.symbol}}</span>
+                        </div>
+                        <div class="fvtt-ct-card-title">{{card.name}}</div>
+                      {{else}}
+                        <div class="fvtt-ct-solo-card-back">
+                          <i class="fa-solid fa-hat-wizard"></i>
+                          <span>Carta da Banca</span>
+                        </div>
+                        <div class="fvtt-ct-card-title">Oculta até o Showdown</div>
+                      {{/if}}
+                    </div>
+                  {{else}}
+                    <p class="fvtt-ct-empty">Clique em "Nova Mão Solo" acima para o Crupiê distribuir.</p>
+                  {{/each}}
+                </div>
+              </div>
+
+              <div class="fvtt-ct-solo-side-box">
+                <h4>
+                  🧑 Suas Cartas no Solo
+                  {{#if solo.playerLiveEval}}
+                    <span class="fvtt-ct-badge-gold">{{solo.playerLiveEval}}</span>
+                  {{/if}}
+                </h4>
+                <div class="fvtt-ct-card-grid">
+                  {{#each solo.playerCards as |card|}}
+                    <div class="fvtt-ct-card">
+                      <div class="fvtt-ct-solo-card-face {{#if card.isRed}}is-red{{/if}}">
+                        <span class="fvtt-ct-solo-corner">{{card.shortLabel}}</span>
+                        <span class="fvtt-ct-solo-big-suit">{{card.symbol}}</span>
+                      </div>
+                      <div class="fvtt-ct-card-title">{{card.name}}</div>
+                    </div>
+                  {{else}}
+                    <p class="fvtt-ct-empty">Nenhuma mão solo ativa.</p>
+                  {{/each}}
+                </div>
+              </div>
+            </div>
+
+            <!-- 5 SLOTS COMUNITÁRIOS DO CRUPIÊ SOLO (FLOP 1-3, TURN, RIVER) -->
+            <div class="fvtt-ct-dealer-board">
+              {{#each solo.dealerSlots as |slot|}}
+                <div class="fvtt-ct-dealer-slot {{#if slot.card}}filled{{/if}}">
+                  <div class="fvtt-ct-slot-label">{{slot.label}}</div>
+                  {{#if slot.card}}
+                    <div class="fvtt-ct-card">
+                      <div class="fvtt-ct-solo-card-face {{#if slot.card.isRed}}is-red{{/if}}">
+                        <span class="fvtt-ct-solo-corner">{{slot.card.shortLabel}}</span>
+                        <span class="fvtt-ct-solo-big-suit">{{slot.card.symbol}}</span>
+                      </div>
+                      <div class="fvtt-ct-card-title">{{slot.card.name}}</div>
+                    </div>
+                  {{else}}
+                    <div class="fvtt-ct-slot-placeholder">
+                      <span>Aguardando {{slot.label}}</span>
+                    </div>
+                  {{/if}}
+                </div>
+              {{/each}}
+            </div>
+          </div>
+        {{else}}
+          <!-- 5 SLOTS OFICIAIS DO CRUPIÊ MULTIPLAYER (FLOP 1, FLOP 2, FLOP 3, TURN, RIVER) -->
+          <div class="fvtt-ct-dealer-board">
+            {{#each dealerSlots as |slot|}}
+              <div class="fvtt-ct-dealer-slot {{#if slot.card}}filled{{/if}}">
+                <div class="fvtt-ct-slot-label">{{slot.label}}</div>
+                {{#if slot.card}}
+                  <div class="fvtt-ct-card" data-card-id="{{slot.card.id}}" data-zone="battlefield">
+                    <div class="fvtt-ct-card-image-wrap">
+                      <img src="{{slot.card.img}}" alt="{{slot.card.name}}" />
+                    </div>
+                    <div class="fvtt-ct-card-title">{{slot.card.name}}</div>
+                  </div>
+                {{else}}
+                  <div class="fvtt-ct-slot-placeholder">
+                    <span>Aguardando Crupiê</span>
+                  </div>
+                {{/if}}
+              </div>
             {{/each}}
           </div>
-        </div>
+
+          <!-- ÁREA DE SHOWDOWN (CARTAS BAIXADAS DA MÃO PELOS JOGADORES) -->
+          <div class="fvtt-ct-showdown-section">
+            <h4><i class="fa-solid fa-eye"></i> Showdown — Cartas Reveladas pelos Jogadores</h4>
+            <div class="fvtt-ct-card-grid">
+              {{#each showdownCards as |card|}}
+                <div class="fvtt-ct-card" data-card-id="{{card.id}}" data-zone="battlefield">
+                  <div class="fvtt-ct-card-image-wrap">
+                    <img src="{{card.img}}" alt="{{card.name}}" />
+                    {{#if card.playedBy}}
+                      <span class="fvtt-ct-meld-tag">{{card.playedBy}}</span>
+                    {{/if}}
+                  </div>
+                  <div class="fvtt-ct-card-title">{{#if card.isFaceDown}}Carta Oculta{{else}}{{card.name}}{{/if}}</div>
+                  <div class="fvtt-ct-card-actions">
+                    <button type="button" data-action="flipCard" title="Virar Face/Verso">
+                      <i class="fa-solid fa-repeat"></i>
+                    </button>
+                    <button type="button" data-action="discardCard" title="Enviar para Muck / Descarte">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              {{else}}
+                <p class="fvtt-ct-empty">Nenhuma carta de jogador revelada ainda (clique em "Jogar" na sua mão na hora do Showdown).</p>
+              {{/each}}
+            </div>
+          </div>
+        {{/if}}
       {{else}}
         <!-- MODO MTG / BURACO -->
         <div class="fvtt-ct-card-grid">
@@ -285,30 +453,32 @@
 
       <div class="fvtt-ct-hand-controls">
         {{#if isPoker}}
-          {{#if hand}}
-            <!-- BARRA DE APOSTAS DO JOGADOR (CHECK/CALL, FICHAS, CUSTOM, ALL-IN, FOLD) -->
-            <button type="button" class="fvtt-ct-btn primary" data-action="pokerCheckOrCall">
-              {{#if hand.canCheck}}
-                ✊ Check (Mesa)
-              {{else}}
-                📞 Call (Pagar {{hand.toCall}})
-              {{/if}}
-            </button>
-            <button type="button" class="fvtt-ct-chip-btn chip-10" data-action="pokerBet" data-amount="10">+10</button>
-            <button type="button" class="fvtt-ct-chip-btn chip-25" data-action="pokerBet" data-amount="25">+25</button>
-            <button type="button" class="fvtt-ct-chip-btn chip-50" data-action="pokerBet" data-amount="50">+50</button>
-            <button type="button" class="fvtt-ct-chip-btn chip-100" data-action="pokerBet" data-amount="100">+100</button>
-            <div class="fvtt-ct-custom-bet-wrap">
-              <input type="number" class="fvtt-ct-custom-bet-input" placeholder="Valor" min="1" step="5" value="20" />
-              <button type="button" class="fvtt-ct-btn" data-action="pokerCustomBet">Apostar</button>
-            </div>
-            <button type="button" class="fvtt-ct-btn allin-btn" data-action="pokerAllIn">
-              🔥 All-In
-            </button>
-            <button type="button" class="fvtt-ct-btn danger" data-action="pokerFold">
-              🏳️ Fold
-            </button>
-          {{/if}}
+          {{#unless isSoloPokerView}}
+            {{#if hand}}
+              <!-- BARRA DE APOSTAS DO JOGADOR NA MESA MULTIPLAYER (CHECK/CALL, FICHAS, CUSTOM, ALL-IN, FOLD) -->
+              <button type="button" class="fvtt-ct-btn primary" data-action="pokerCheckOrCall">
+                {{#if hand.canCheck}}
+                  ✊ Check (Mesa)
+                {{else}}
+                  📞 Call (Pagar {{hand.toCall}})
+                {{/if}}
+              </button>
+              <button type="button" class="fvtt-ct-chip-btn chip-10" data-action="pokerBet" data-amount="10">+10</button>
+              <button type="button" class="fvtt-ct-chip-btn chip-25" data-action="pokerBet" data-amount="25">+25</button>
+              <button type="button" class="fvtt-ct-chip-btn chip-50" data-action="pokerBet" data-amount="50">+50</button>
+              <button type="button" class="fvtt-ct-chip-btn chip-100" data-action="pokerBet" data-amount="100">+100</button>
+              <div class="fvtt-ct-custom-bet-wrap">
+                <input type="number" class="fvtt-ct-custom-bet-input" placeholder="Valor" min="1" step="5" value="20" />
+                <button type="button" class="fvtt-ct-btn" data-action="pokerCustomBet">Apostar</button>
+              </div>
+              <button type="button" class="fvtt-ct-btn allin-btn" data-action="pokerAllIn">
+                🔥 All-In
+              </button>
+              <button type="button" class="fvtt-ct-btn danger" data-action="pokerFold">
+                🏳️ Fold
+              </button>
+            {{/if}}
+          {{/unless}}
         {{/if}}
 
         <button type="button" class="fvtt-ct-btn" data-action="sortHand" data-sort-by="suit" title="Ordenar por Naipe">

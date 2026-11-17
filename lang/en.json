@@ -14,6 +14,10 @@
       "AutoSync": {
         "Name": "Auto-Sync World Decks with Compendium",
         "Hint": "Automatically updates world deck metadata when the module is updated via GitHub."
+      },
+      "AllowSoloPoker": {
+        "Name": "Allow Solo vs. Dealer Mode (Texas Hold'em)",
+        "Hint": "When enabled, allows players to play solo Texas Hold'em against the Dealer in an isolated Pot without affecting the multiplayer table."
       }
     },
     "Keybindings": {
